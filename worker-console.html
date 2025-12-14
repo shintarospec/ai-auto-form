@@ -774,26 +774,43 @@
 
                 const result = await response.json();
 
-                if (response.ok) {
-                    // 成功
+                if (response.ok && result.submitted) {
+                    // 送信完了（ボタンを押した）
                     statusDiv.className = 'mt-4 p-3 rounded-lg bg-green-900/20 border border-green-500/30';
                     statusDiv.innerHTML = `
-                        <p class="text-sm text-green-300 font-bold"><i class="fa-solid fa-check-circle mr-2"></i>送信成功！</p>
+                        <p class="text-sm text-green-300 font-bold"><i class="fa-solid fa-check-circle mr-2"></i>送信完了！</p>
                         <p class="text-xs text-green-400 mt-1">${result.message || 'フォームの送信が完了しました'}</p>
                     `;
                     
-                    // タスクステータスを更新
+                    // タスクステータスを「完了」に更新
                     dataManager.updateTask(currentTask.id, { 
-                        status: 'submitted',
+                        status: 'completed',
+                        submitted: true,
                         submittedAt: new Date().toISOString()
                     });
                     
-                    showToast("送信成功", "自動送信が完了しました");
+                    showToast("送信完了", "自動送信が完了しました（+50pt）");
                     
-                    // 3秒後に自動で完了処理
+                    // 3秒後に自動で次のタスクへ
                     setTimeout(() => {
                         completeTask();
                     }, 3000);
+                } else if (response.ok && !result.submitted) {
+                    // 入力のみ（ボタンを押さなかった）
+                    statusDiv.className = 'mt-4 p-3 rounded-lg bg-yellow-900/20 border border-yellow-500/30';
+                    statusDiv.innerHTML = `
+                        <p class="text-sm text-yellow-300 font-bold"><i class="fa-solid fa-exclamation-circle mr-2"></i>入力のみ</p>
+                        <p class="text-xs text-yellow-400 mt-1">フォーム入力は完了しましたが、送信ボタンが押されませんでした。</p>
+                        <p class="text-xs text-yellow-400 mt-1">このタスクはポイント付与されません。再実行してください。</p>
+                        <button onclick="autoSubmitForm()" class="mt-2 text-xs text-yellow-300 hover:text-yellow-200 underline">再実行</button>
+                    `;
+                    
+                    // タスクステータスを「入力のみ」に更新
+                    dataManager.updateTask(currentTask.id, { 
+                        status: 'filled_only',
+                        submitted: false,
+                        filledAt: new Date().toISOString()
+                    });
                 } else {
                     throw new Error(result.error || '送信に失敗しました');
                 }
