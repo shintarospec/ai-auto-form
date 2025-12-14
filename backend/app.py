@@ -227,14 +227,8 @@ def submit_task_form(task_id):
         }
         
         # テスト用フォームURLを使用（本番環境では実際のURLを使用）
-        # ローカル環境とCodespaces環境で分岐
-        import os
-        if os.getenv('CODESPACE_NAME'):
-            # Codespaces環境
-            test_form_url = 'https://laughing-spoon-x5gwpjvxr5w72vpv4-8000.app.github.dev/test-form.html'
-        else:
-            # ローカル環境
-            test_form_url = 'http://localhost:8000/test-form.html'
+        # デフォルトはlocalhost（ローカル開発環境）
+        test_form_url = 'http://localhost:8000/test-form.html'
         
         actual_url = data.get('companyUrl', test_form_url)
         
