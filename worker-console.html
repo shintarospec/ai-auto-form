@@ -350,35 +350,43 @@
                     <div class="bg-slate-800 p-5 rounded-xl shadow-lg relative overflow-hidden group">
                         <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-blue-500"></div>
                         
-                        <!-- 目視確認の説明（強調版） -->
-                        <div class="bg-gradient-to-br from-blue-600 to-blue-700 p-5 rounded-xl mb-4 shadow-lg">
-                            <div class="flex items-start gap-4">
-                                <div class="mt-1 text-blue-200 text-2xl"><i class="fa-solid fa-eye"></i></div>
-                                <div class="flex-1">
-                                    <p class="text-base font-bold text-white mb-3">✓ 作業の流れ</p>
-                                    <div class="space-y-2 text-sm text-blue-100">
-                                        <div class="flex items-start gap-2">
-                                            <span class="text-blue-300 font-bold">1.</span>
-                                            <span>必須項目が埋まっているか確認</span>
-                                        </div>
-                                        <div class="flex items-start gap-2">
-                                            <span class="text-blue-300 font-bold">2.</span>
-                                            <span><b class="text-white">reCAPTCHA</b>があれば対応</span>
-                                        </div>
-                                        <div class="flex items-start gap-2">
-                                            <span class="text-blue-300 font-bold">3.</span>
-                                            <span>ブラウザで「<b class="text-white">送信</b>」を押す</span>
-                                        </div>
-                                    </div>
+                        <!-- 作業の流れタイトル -->
+                        <h3 class="text-white font-bold text-lg mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-green-400"></i>
+                            作業の流れ
+                        </h3>
+                        
+                        <!-- 目視確認の説明 -->
+                        <div class="bg-gradient-to-br from-blue-600 to-blue-700 p-4 rounded-xl mb-4 shadow-lg">
+                            <div class="space-y-2 text-sm text-blue-100">
+                                <div class="flex items-start gap-3">
+                                    <span class="text-blue-300 font-bold text-lg">1</span>
+                                    <span class="pt-0.5">必須項目が埋まっているか確認</span>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <span class="text-blue-300 font-bold text-lg">2</span>
+                                    <span class="pt-0.5"><b class="text-white">reCAPTCHA</b>があれば対応</span>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <span class="text-blue-300 font-bold text-lg">3</span>
+                                    <span class="pt-0.5">ブラウザで「<b class="text-white">送信</b>」を押す</span>
                                 </div>
                             </div>
                         </div>
                         
+                        <!-- ボタンクリック誘導メッセージ -->
+                        <div class="bg-yellow-500/10 border-2 border-yellow-500/30 rounded-lg p-3 mb-3 text-center">
+                            <p class="text-yellow-300 font-bold text-sm flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-hand-pointer"></i>
+                                流れを確認したらボタンをクリック！
+                            </p>
+                        </div>
+                        
                         <div class="flex flex-col gap-2">
                             <!-- AI自動送信ボタン -->
-                            <button onclick="autoSubmitForm()" id="auto-submit-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 text-lg rounded-lg transition shadow-lg shadow-indigo-900/30 flex items-center justify-center gap-2 transform active:scale-95">
-                                <i class="fa-solid fa-robot text-xl"></i>
-                                <span>AI自動送信</span>
+                            <button onclick="autoSubmitForm()" id="auto-submit-btn" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-4 text-lg rounded-lg transition shadow-lg shadow-indigo-900/50 flex items-center justify-center gap-3 transform active:scale-95">
+                                <i class="fa-solid fa-rocket text-xl"></i>
+                                <span>自動送信スタート</span>
                             </button>
                             
                             <div class="flex gap-2 mt-2">
