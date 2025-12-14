@@ -153,10 +153,51 @@ class FormAutomationService:
             # 作業者が内容を確認して送信ボタンを押すまで待機
             print("👀 作業者による確認待ち...")
             print("   フォーム内容を確認して、送信ボタンを押してください")
-            print(f"   {30}秒後に自動的にブラウザを閉じます")
+            print(f"   {60}秒後に自動的にブラウザを閉じます")
             
-            # 30秒間待機（作業者が送信ボタンを押す時間）
-            time.sleep(30)
+            # 送信完了を検出（60秒間）
+            initial_url = page.url
+            submitted = False
+            wait_time = 60
+            check_interval = 1  # 1秒ごとにチェック
+            
+            for i in range(wait_time):
+                time.sleep(check_interval)
+                
+                # URL変化をチェック（thank-you、confirm、successなどの文字列を検出）
+                current_url = page.url
+                if current_url != initial_url:
+                    if any(keyword in current_url.lower() for keyword in ['thank', 'success', 'confirm', 'complete']):
+                        submitted = True
+                        print(f"✅ 送信完了を検出しました！ ({i+1}秒後)")
+                        print(f"   遷移先URL: {current_url}")
+                        break
+                
+                # 送信完了メッセージを検出
+                try:
+                    success_selectors = [
+                        'text=送信完了',
+                        'text=ありがとうございました',
+                        'text=Thank you',
+                        'text=Success',
+                        '[class*="success"]',
+                        '[class*="complete"]',
+                        '[id*="success"]',
+                        '[id*="complete"]'
+                    ]
+                    for selector in success_selectors:
+                        if page.locator(selector).count() > 0:
+                            submitted = True
+                            print(f"✅ 送信完了メッセージを検出しました！ ({i+1}秒後)")
+                            break
+                    if submitted:
+                        break
+                except:
+                    pass
+            
+            if not submitted:
+                print("⚠️  送信完了を検出できませんでした（タイムアウト）")
+                print("   作業者が送信ボタンを押さなかった可能性があります")
             
             # スクリーンショットを撮影（送信後の状態）
             screenshot_path = f'/tmp/form_screenshot_{int(time.time())}.png'
@@ -168,7 +209,9 @@ class FormAutomationService:
                 'fields_filled': fields_filled,
                 'has_recaptcha': has_recaptcha,
                 'screenshot': screenshot_path,
-                'message': f'{len(fields_filled)}個のフィールドに入力完了'
+                'submitted': submitted,  # 送信されたかどうか
+                'final_url': page.url,  # 最終URL
+                'message': f'{len(fields_filled)}個のフィールドに入力完了' + (' → 送信完了' if submitted else ' → 送信未完了')
             }
             
         except Exception as e:
