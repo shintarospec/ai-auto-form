@@ -343,23 +343,7 @@
                 <!-- 右：コントロールパネル (リモコン) -->
                 <div class="w-1/4 flex flex-col gap-4">
                     
-                    <!-- ステップ1: ブラウザ操作 -->
-                    <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                        <div class="flex items-center justify-between mb-3">
-                            <span class="text-xs font-bold text-slate-400 uppercase">Step 1: ブラウザ・入力</span>
-                            <span id="status-step1" class="text-green-500 text-xs hidden"><i class="fa-solid fa-check-circle"></i> 完了</span>
-                        </div>
-                        <div class="space-y-3">
-                            <button onclick="mockAction('browser')" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-lg flex items-center justify-center transition border border-slate-200">
-                                <i class="fa-brands fa-chrome text-lg mr-2 text-slate-500"></i> ブラウザを開く
-                            </button>
-                            <button onclick="mockAction('fill')" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 rounded-lg flex items-center justify-center transition shadow-md shadow-orange-100">
-                                <i class="fa-solid fa-pen-to-square mr-2"></i> 自動入力を実行
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- ステップ2: 確認作業 (reCAPTCHA等) -->
+                    <!-- 確認作業の説明 -->
                     <div class="bg-blue-50 p-4 rounded-xl shadow-sm border border-blue-100">
                         <div class="flex items-start gap-3">
                             <div class="mt-1 text-blue-500"><i class="fa-solid fa-eye"></i></div>
