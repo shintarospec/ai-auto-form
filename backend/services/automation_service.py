@@ -170,6 +170,11 @@ class FormAutomationService:
             for i in range(wait_time):
                 time.sleep(1)
                 
+                # ブラウザが閉じられたかチェック
+                if page.is_closed():
+                    print("⚠️  作業者がブラウザを閉じました")
+                    break
+                
                 # URL変化をチェック
                 current_url = page.url
                 if current_url != initial_url:
