@@ -17,6 +17,18 @@ AIによる高度なパーソナライズとHuman-in-the-Loopを組み合わせ�
 
 ---
 
+## 📚 ドキュメント
+
+詳細な情報は以下のドキュメントを参照してください：
+
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - システムアーキテクチャ、技術スタック、データフロー
+- **[WORKFLOW.md](docs/WORKFLOW.md)** - 管理者・作業者の操作手順、トラブルシューティング
+- **[API.md](docs/API.md)** - API仕様、エンドポイント一覧、データモデル
+- **[DEVELOPMENT_LOG.md](docs/DEVELOPMENT_LOG.md)** - 開発ログ、技術的課題と解決策
+- **[CHANGELOG.md](docs/CHANGELOG.md)** - バージョン履歴、変更内容、破壊的変更
+
+---
+
 ## 🚀 クイックスタート（Phase 1: プロトタイプ版）
 
 ### **Phase 1: フロントエンドプロトタイプ**
