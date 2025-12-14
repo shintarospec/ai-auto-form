@@ -159,39 +159,37 @@ class FormAutomationService:
             initial_url = page.url
             submitted = False
             wait_time = 60
-            check_interval = 1  # 1秒ごとにチェック
             
+            # 1秒ごとにチェック（60回）
             for i in range(wait_time):
-                time.sleep(check_interval)
+                time.sleep(1)
                 
                 # URL変化をチェック（thank-you、confirm、successなどの文字列を検出）
                 current_url = page.url
                 if current_url != initial_url:
                     if any(keyword in current_url.lower() for keyword in ['thank', 'success', 'confirm', 'complete']):
                         submitted = True
-                        print(f"✅ 送信完了を検出しました！ ({i+1}秒後)")
+                        print(f"✅ 送信完了を検出しました（URL変化）！ ({i+1}秒後)")
                         print(f"   遷移先URL: {current_url}")
+                        time.sleep(2)  # 確認のため2秒待機
                         break
                 
-                # 送信完了メッセージを検出
+                # フォームが非表示になったかチェック（送信後はフォームが消える）
                 try:
-                    success_selectors = [
-                        'text=送信完了',
-                        'text=ありがとうございました',
-                        'text=Thank you',
-                        'text=Success',
-                        '[class*="success"]',
-                        '[class*="complete"]',
-                        '[id*="success"]',
-                        '[id*="complete"]'
-                    ]
-                    for selector in success_selectors:
-                        if page.locator(selector).count() > 0:
+                    form_element = page.locator('form')
+                    success_element = page.locator('#success-message')
+                    
+                    # フォームが非表示 & 成功メッセージが表示されている
+                    if success_element.count() > 0:
+                        is_success_visible = success_element.is_visible()
+                        is_form_visible = form_element.count() > 0 and form_element.is_visible()
+                        
+                        # 成功メッセージが表示されていて、フォームが非表示なら送信完了
+                        if is_success_visible and not is_form_visible:
                             submitted = True
-                            print(f"✅ 送信完了メッセージを検出しました！ ({i+1}秒後)")
+                            print(f"✅ 送信完了を検出しました（フォーム送信）！ ({i+1}秒後)")
+                            time.sleep(2)  # 確認のため2秒待機
                             break
-                    if submitted:
-                        break
                 except:
                     pass
             
