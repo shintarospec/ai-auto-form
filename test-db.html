@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test DB</title>
+</head>
+<body>
+    <h1>Test LocalStorage</h1>
+    <div id="result"></div>
+    
+    <script src="js/data-manager.js"></script>
+    <script>
+        const result = document.getElementById('result');
+        
+        try {
+            // データマネージャーのテスト
+            result.innerHTML = '<h2>DataManager Test</h2>';
+            
+            const companies = dataManager.getCompanies();
+            result.innerHTML += `<p>企業数: ${companies.length}</p>`;
+            
+            companies.forEach(c => {
+                result.innerHTML += `<p>${c.id}: ${c.name} - ${c.analyzed ? '解析済み' : '未解析'}</p>`;
+            });
+            
+            const workers = dataManager.getWorkers();
+            result.innerHTML += `<p>作業者数: ${workers.length}</p>`;
+            
+            const projects = dataManager.getProjects();
+            result.innerHTML += `<p>プロジェクト数: ${projects.length}</p>`;
+            
+            result.innerHTML += '<p style="color:green">✓ All tests passed!</p>';
+        } catch (e) {
+            result.innerHTML += `<p style="color:red">Error: ${e.message}</p>`;
+            console.error(e);
+        }
+    </script>
+</body>
+</html>

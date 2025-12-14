@@ -1,0 +1,1909 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Console - AI AutoForm</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        /* ローディングアニメーション */
+        .pulse-ring {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #6366f1;
+            border-radius: 50%;
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.33); opacity: 1; }
+            80%, 100% { transform: scale(2); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 h-screen flex overflow-hidden">
+
+    <!-- Admin Sidebar -->
+    <aside class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col z-20">
+        <div class="h-16 flex items-center px-6 border-b border-slate-800">
+            <i class="fa-solid fa-layer-group text-indigo-500 text-xl mr-3"></i>
+            <span class="font-bold text-lg text-white tracking-wide">Admin Console</span>
+        </div>
+        
+        <!-- API Status Indicator -->
+        <div id="api-status" class="mx-3 mt-3 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 hidden">
+            <div class="flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
+                <span class="text-xs text-slate-400">API接続中...</span>
+            </div>
+        </div>
+
+        <nav class="flex-1 py-6 space-y-1 px-3">
+            <p class="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Management</p>
+            
+            <button onclick="switchView('overview')" id="nav-overview" class="w-full flex items-center px-4 py-3 rounded-lg bg-indigo-600 text-white shadow-lg shadow-indigo-900/50 transition-all">
+                <i class="fa-solid fa-chart-line w-6"></i>
+                <span class="font-medium">全体サマリー</span>
+            </button>
+            
+            <button onclick="switchView('projects')" id="nav-projects" class="w-full flex items-center px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <i class="fa-solid fa-diagram-project w-6"></i>
+                <span class="font-medium">プロジェクト管理</span>
+            </button>
+
+            <p class="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mt-6 mb-2">Databases</p>
+            
+            <button onclick="switchView('db-company')" id="nav-db-company" class="w-full flex items-center px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <i class="fa-solid fa-building w-6"></i>
+                <span class="font-medium">企業リストDB</span>
+            </button>
+            
+            <button onclick="switchView('db-project')" id="nav-db-project" class="w-full flex items-center px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <i class="fa-solid fa-briefcase w-6"></i>
+                <span class="font-medium">案件・商材DB</span>
+            </button>
+
+            <button onclick="switchView('db-worker')" id="nav-db-worker" class="w-full flex items-center px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <i class="fa-solid fa-users w-6"></i>
+                <span class="font-medium">作業者DB</span>
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-slate-800 text-xs text-slate-500 text-center">
+            v2.5.0 (Worker Mgmt Added)
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col relative overflow-hidden bg-slate-900">
+        
+        <!-- Header -->
+        <header class="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-8 z-10">
+            <h2 id="page-title" class="text-xl font-bold text-white">全体サマリー</h2>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-800 rounded-full border border-slate-700">
+                    <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <span class="text-xs font-medium text-slate-300">System Healthy</span>
+                </div>
+                <button class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 transition">
+                    <i class="fa-solid fa-bell"></i>
+                </button>
+                <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 border-2 border-slate-800"></div>
+            </div>
+        </header>
+
+        <!-- VIEW 1: Overview Dashboard -->
+        <div id="view-overview" class="view-section flex-1 overflow-y-auto p-8">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-4 gap-6 mb-8">
+                <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-2">本日の送信総数</p>
+                    <div class="flex items-end gap-3">
+                        <span class="text-3xl font-bold text-white" id="overview-sent-today">0</span>
+                        <span class="text-sm text-green-400 font-bold mb-1"><i class="fa-solid fa-arrow-trend-up"></i> +12%</span>
+                    </div>
+                </div>
+                <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-2">稼働中プロジェクト</p>
+                    <div class="flex items-end gap-3">
+                        <span class="text-3xl font-bold text-white" id="overview-active-projects">0</span>
+                        <span class="text-sm text-slate-500 mb-1">/ 全5件</span>
+                    </div>
+                </div>
+                <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-2">AI解析待機中</p>
+                    <div class="flex items-end gap-3">
+                        <span class="text-3xl font-bold text-indigo-400" id="overview-pending-ai">0</span>
+                        <span class="text-sm text-slate-500 mb-1">Project</span>
+                    </div>
+                </div>
+                <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-2">アクティブWorker</p>
+                    <div class="flex items-end gap-3">
+                        <span class="text-3xl font-bold text-yellow-400" id="overview-active-workers">0</span>
+                        <span class="text-sm text-slate-500 mb-1">名</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts & Lists -->
+            <div class="grid grid-cols-3 gap-6 h-96">
+                <!-- Main Chart -->
+                <div class="col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg flex flex-col">
+                    <h3 class="font-bold text-slate-200 mb-4">送信数推移 (直近7日間)</h3>
+                    <div class="flex-1 relative">
+                        <canvas id="sendChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Worker Ranking -->
+                <div class="col-span-1 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg overflow-hidden flex flex-col">
+                    <h3 class="font-bold text-slate-200 mb-4">Worker ランキング (本日)</h3>
+                    <div class="flex-1 overflow-y-auto space-y-3 pr-2">
+                        <div class="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-xs font-bold">KT</div>
+                                <span class="text-sm font-medium">田中 健一</span>
+                            </div>
+                            <span class="text-sm font-bold text-white">320件</span>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-pink-500 flex items-center justify-center text-xs font-bold">SY</div>
+                                <span class="text-sm font-medium">佐藤 優子</span>
+                            </div>
+                            <span class="text-sm font-bold text-white">285件</span>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold">YM</div>
+                                <span class="text-sm font-medium">山田 太郎</span>
+                            </div>
+                            <span class="text-sm font-bold text-white">210件</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 2: Project Management -->
+        <div id="view-projects" class="view-section hidden flex-1 overflow-y-auto p-8">
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h3 class="text-xl font-bold text-white mb-1">プロジェクト管理</h3>
+                    <p class="text-slate-400 text-sm">企業リストと案件を組み合わせ、作業チームを編成します。</p>
+                </div>
+                <button onclick="toggleModal('projectModal')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-6 rounded-xl shadow-lg shadow-indigo-900/50 transition flex items-center gap-2">
+                    <i class="fa-solid fa-plus"></i> 新規プロジェクト作成
+                </button>
+            </div>
+
+            <!-- Active Projects Grid -->
+            <div class="grid grid-cols-2 gap-6">
+                
+                <!-- Project Card 1: 進行中 -->
+                <div class="bg-slate-800 rounded-2xl border border-slate-700 shadow-lg overflow-hidden flex flex-col hover:border-indigo-500/50 transition group">
+                    <div class="p-6 border-b border-slate-700/50 bg-slate-800 relative">
+                        <div class="absolute top-0 left-0 w-1 h-full bg-green-500"></div>
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="bg-green-900/30 text-green-400 text-xs px-2 py-1 rounded border border-green-900/50 font-bold">進行中</span>
+                            <button class="text-slate-500 hover:text-white"><i class="fa-solid fa-ellipsis"></i></button>
+                        </div>
+                        <h4 class="text-lg font-bold text-white mb-1">東京IT企業向け_AIツール営業</h4>
+                        <p class="text-xs text-slate-400 flex items-center gap-3">
+                            <span><i class="fa-solid fa-list mr-1"></i> リスト: 東京_IT_1000件</span>
+                            <span><i class="fa-solid fa-briefcase mr-1"></i> 案件: 自社AIツール</span>
+                        </p>
+                    </div>
+                    <div class="p-6 flex-1 flex flex-col justify-between">
+                        <div class="mb-4">
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="text-slate-400">進捗状況</span>
+                                <span class="text-white font-bold">450 / 1,000</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+                                <div class="bg-green-500 w-[45%] h-full"></div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <p class="text-xs text-slate-500 font-bold uppercase mb-2">アサイン中のWorker</p>
+                            <div class="flex items-center justify-between">
+                                <div class="flex -space-x-2">
+                                    <div class="w-8 h-8 rounded-full bg-indigo-500 border-2 border-slate-800 flex items-center justify-center text-xs text-white" title="山田 太郎">YM</div>
+                                    <div class="w-8 h-8 rounded-full bg-blue-500 border-2 border-slate-800 flex items-center justify-center text-xs text-white" title="田中 健一">KT</div>
+                                </div>
+                                <button class="text-sm text-indigo-400 hover:text-indigo-300 font-bold">管理 <i class="fa-solid fa-angle-right ml-1"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Project Card 2: AI解析中 (NEW) -->
+                <div class="bg-slate-800 rounded-2xl border border-indigo-500/30 shadow-lg overflow-hidden flex flex-col relative">
+                    <!-- Loading Overlay Indicator -->
+                    <div class="absolute top-4 right-4">
+                        <div class="relative">
+                            <div class="pulse-ring"></div>
+                            <div class="w-2.5 h-2.5 bg-indigo-500 rounded-full"></div>
+                        </div>
+                    </div>
+
+                    <div class="p-6 border-b border-slate-700/50 bg-slate-800/50">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="bg-indigo-900/30 text-indigo-400 text-xs px-2 py-1 rounded border border-indigo-900/50 font-bold flex items-center gap-1">
+                                <i class="fa-solid fa-wand-magic-sparkles animate-pulse"></i> AI解析準備中
+                            </span>
+                        </div>
+                        <h4 class="text-lg font-bold text-white mb-1">【新】名古屋_不動産リスト_キャンペーン</h4>
+                        <p class="text-xs text-slate-400 flex items-center gap-3">
+                            <span><i class="fa-solid fa-list mr-1"></i> リスト: 名古屋_不動産_300件</span>
+                            <span><i class="fa-solid fa-briefcase mr-1"></i> 案件: 自社AIツール</span>
+                        </p>
+                    </div>
+                    <div class="p-6 flex-1 flex flex-col justify-center items-center text-center">
+                        <div class="mb-4 w-full">
+                            <p class="text-sm text-slate-300 mb-2 font-bold">文面を生成しています...</p>
+                            <div class="w-full bg-slate-700 rounded-full h-2.5 mb-1">
+                                <div class="bg-indigo-500 h-2.5 rounded-full" style="width: 45%"></div>
+                            </div>
+                            <p class="text-xs text-slate-500 text-right">135 / 300 件完了</p>
+                        </div>
+                        <p class="text-xs text-slate-500">
+                            完了次第、Workerに自動配信されます。<br>
+                            (予想残り時間: 3分)
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Project Card 3: 完了 -->
+                <div class="bg-slate-800 rounded-2xl border border-slate-700 shadow-lg overflow-hidden flex flex-col hover:border-indigo-500/50 transition group opacity-75">
+                    <div class="p-6 border-b border-slate-700/50 bg-slate-800 relative">
+                        <div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="bg-blue-900/30 text-blue-400 text-xs px-2 py-1 rounded border border-blue-900/50 font-bold">完了</span>
+                            <button class="text-slate-500 hover:text-white"><i class="fa-solid fa-ellipsis"></i></button>
+                        </div>
+                        <h4 class="text-lg font-bold text-white mb-1">大阪製造業_採用代行キャンペーン</h4>
+                        <p class="text-xs text-slate-400 flex items-center gap-3">
+                            <span><i class="fa-solid fa-list mr-1"></i> リスト: 大阪_製造_500件</span>
+                        </p>
+                    </div>
+                    <div class="p-6 flex-1 flex flex-col justify-between">
+                         <div class="mb-4">
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="text-slate-400">進捗状況</span>
+                                <span class="text-white font-bold">500 / 500</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+                                <div class="bg-blue-500 w-full h-full"></div>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500">2023/12/10 完了</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- VIEW 3: Databases (Company List) -->
+        <div id="view-db-company" class="view-section hidden flex-1 p-8 overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h3 class="text-xl font-bold text-white">企業リストデータベース</h3>
+                    <p class="text-slate-400 text-sm">解析状況を確認し、AIに企業情報を取得させます。</p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="toggleModal('companyModal')" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-green-900/50 transition">
+                        <i class="fa-solid fa-plus"></i> 新規企業登録
+                    </button>
+
+                    <button onclick="runBatchAnalysis()" class="bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/50 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> AI一括解析
+                    </button>
+                    
+                    <button onclick="document.getElementById('csvInput').click()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 border border-slate-600 transition">
+                        <i class="fa-solid fa-file-csv"></i> CSV取込
+                    </button>
+                    <input type="file" id="csvInput" class="hidden" accept=".csv" onchange="handleCSVImport(this)">
+                </div>
+            </div>
+
+            <!-- ターゲットリスト管理セクション (NEW) -->
+            <div class="bg-gradient-to-r from-purple-900/20 to-indigo-900/20 border border-purple-500/30 rounded-xl p-6 mb-8">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <h4 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-layer-group text-purple-400"></i> ターゲットリスト管理
+                        </h4>
+                        <p class="text-slate-400 text-xs mt-1">企業をグループ化してターゲットリストを作成</p>
+                    </div>
+                    <div class="flex gap-3">
+                        <button onclick="toggleModal('targetListCSVModal')" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-purple-900/50 transition">
+                            <i class="fa-solid fa-file-csv"></i> CSVからリスト作成
+                        </button>
+                        <button onclick="toggleModal('targetListSelectModal')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-indigo-900/50 transition">
+                            <i class="fa-solid fa-check-double"></i> 企業選択でリスト作成
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ターゲットリスト一覧 -->
+                <div id="target-lists-container" class="grid grid-cols-3 gap-4">
+                    <!-- JavaScriptで動的生成 -->
+                </div>
+            </div>
+
+            <!-- Stats for DB -->
+            <div class="grid grid-cols-3 gap-6 mb-8">
+                <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">データベース総数</p>
+                    <p class="text-2xl font-bold text-white" id="company-total">0</p>
+                </div>
+                <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">AI解析完了数</p>
+                    <p class="text-2xl font-bold text-indigo-400" id="company-analyzed">0 <span class="text-sm font-normal text-slate-500">/ 0%</span></p>
+                </div>
+                <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">未解析</p>
+                    <p class="text-2xl font-bold text-slate-300" id="company-pending">0</p>
+                </div>
+            </div>
+
+            <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                <table class="min-w-full text-left text-sm text-slate-400">
+                    <thead class="bg-slate-900/50 uppercase font-medium border-b border-slate-700">
+                        <tr>
+                            <th class="px-4 py-3">ID</th>
+                            <th class="px-4 py-3">企業名</th>
+                            <th class="px-4 py-3">URL</th>
+                            <th class="px-4 py-3">ステータス</th>
+                            <th class="px-4 py-3">登録日</th>
+                            <th class="px-4 py-3 text-center">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- JavaScriptで動的生成 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="view-db-project" class="view-section hidden flex-1 p-8">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-white">案件・商材データベース</h3>
+                <button class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-bold">
+                    <i class="fa-solid fa-plus"></i> 新規案件登録
+                </button>
+            </div>
+            <!-- Project Cards -->
+            <div class="grid grid-cols-3 gap-6">
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 hover:border-indigo-500 transition cursor-pointer group">
+                    <div class="flex justify-between items-start mb-4">
+                        <span class="bg-indigo-900 text-indigo-300 text-xs px-2 py-1 rounded">自社商材</span>
+                        <i class="fa-solid fa-pen text-slate-500 group-hover:text-white"></i>
+                    </div>
+                    <h4 class="font-bold text-lg text-white mb-2">AIフォーム自動化ツール</h4>
+                    <p class="text-sm text-slate-400 mb-4 line-clamp-2">「フォーム営業を自動化しませんか？」という訴求。IT系、人材系企業に有効。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW: Worker Management (NEW Implementation) -->
+        <div id="view-db-worker" class="view-section hidden flex-1 p-8 overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h3 class="text-xl font-bold text-white">作業者（Worker）管理</h3>
+                    <p class="text-slate-400 text-sm">作業スタッフの登録・管理を行います。</p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="document.getElementById('workerCsvInput').click()" class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 border border-slate-600 transition">
+                        <i class="fa-solid fa-file-csv"></i> Worker CSV取込
+                    </button>
+                    <!-- Hidden Input -->
+                    <input type="file" id="workerCsvInput" class="hidden" accept=".csv" onchange="handleWorkerCSVImport(this)">
+
+                    <button onclick="toggleModal('workerModal')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-900/50 transition">
+                        <i class="fa-solid fa-user-plus"></i> 新規ワーカー登録
+                    </button>
+                    <button class="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-bold">
+                        <i class="fa-solid fa-link"></i> 招待リンク
+                    </button>
+                </div>
+            </div>
+
+            <!-- Worker Stats -->
+            <div class="grid grid-cols-3 gap-6 mb-8">
+                <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">登録ワーカー数</p>
+                    <p class="text-2xl font-bold text-white" id="worker-total">0 <span class="text-sm text-slate-500 font-normal">名</span></p>
+                </div>
+                <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">稼働中</p>
+                    <p class="text-2xl font-bold text-green-400" id="worker-active">0 <span class="text-sm text-slate-500 font-normal">名</span></p>
+                </div>
+                <div class="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-1">停止中</p>
+                    <p class="text-2xl font-bold text-slate-400" id="worker-inactive">0 <span class="text-sm text-slate-500 font-normal">名</span></p>
+                </div>
+            </div>
+
+            <!-- Worker List Table -->
+            <div class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+                <table class="min-w-full text-left text-sm text-slate-400">
+                    <thead class="bg-slate-900/50 uppercase font-medium border-b border-slate-700">
+                        <tr>
+                            <th class="px-4 py-3">ID</th>
+                            <th class="px-4 py-3">氏名</th>
+                            <th class="px-4 py-3">ステータス</th>
+                            <th class="px-4 py-3">ランク</th>
+                            <th class="px-4 py-3">完了件数</th>
+                            <th class="px-4 py-3">累計ポイント</th>
+                            <th class="px-4 py-3">登録日</th>
+                            <th class="px-4 py-3 text-center">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- JavaScriptで動的生成 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal: Create Project -->
+    <div id="projectModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+        <div class="bg-slate-800 w-full max-w-2xl rounded-2xl border border-slate-700 shadow-2xl overflow-hidden">
+            <div class="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
+                <h3 class="text-lg font-bold text-white">新規プロジェクト作成</h3>
+                <button onclick="toggleModal('projectModal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-8 space-y-6">
+                <!-- Project Name -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-2">プロジェクト名 <span class="text-red-500">*</span></label>
+                    <input type="text" id="project-name" placeholder="例: 製造業向けAIツール営業" class="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-6">
+                    <!-- List Selection -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-2">ターゲットリスト <span class="text-red-500">*</span></label>
+                        <select id="project-target-list" class="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <option value="">選択してください...</option>
+                            <!-- JavaScriptで動的生成 -->
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1">
+                            <i class="fa-solid fa-info-circle mr-1"></i>
+                            <a href="#" onclick="event.preventDefault(); switchView('db-company'); toggleModal('projectModal');" class="text-purple-400 hover:text-purple-300">ターゲットリストを作成</a>
+                        </p>
+                    </div>
+                    <!-- Product Selection -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-2">商材・案件 <span class="text-red-500">*</span></label>
+                        <select id="project-product" class="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <option value="">選択してください...</option>
+                            <!-- JavaScriptで動的生成 -->
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Worker Assignment -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-2">初期メンバーをアサイン</label>
+                    <div id="project-workers-list" class="bg-slate-700/50 border border-slate-600 rounded-lg p-4 max-h-32 overflow-y-auto">
+                        <!-- JavaScriptで動的生成 -->
+                    </div>
+                </div>
+            </div>
+            <div class="p-6 border-t border-slate-700 bg-slate-900/50 flex justify-end gap-3">
+                <button onclick="toggleModal('projectModal')" class="px-4 py-2 text-slate-400 hover:text-white font-bold transition">キャンセル</button>
+                <button onclick="createProject()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-bold shadow-lg shadow-indigo-900/50 transition transform hover:scale-105">
+                    作成してAI解析を開始
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Register Worker (NEW) -->
+    <div id="workerModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+        <div class="bg-slate-800 w-full max-w-md rounded-2xl border border-slate-700 shadow-2xl overflow-hidden">
+            <div class="p-5 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
+                <h3 class="text-lg font-bold text-white">新規ワーカー登録</h3>
+                <button onclick="toggleModal('workerModal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-2">氏名 <span class="text-red-500">*</span></label>
+                    <input type="text" placeholder="山田 太郎" class="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-2">メールアドレス <span class="text-red-500">*</span></label>
+                    <input type="email" placeholder="worker@example.com" class="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-2">権限ロール</label>
+                    <select class="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="worker">一般ワーカー (Worker)</option>
+                        <option value="leader">リーダー (Leader)</option>
+                    </select>
+                </div>
+                <div class="pt-2">
+                    <p class="text-xs text-slate-500">※ 登録後、招待メールが自動送信されます。</p>
+                </div>
+            </div>
+            <div class="p-5 border-t border-slate-700 bg-slate-900/50 flex justify-end gap-3">
+                <button onclick="toggleModal('workerModal')" class="px-4 py-2 text-slate-400 hover:text-white font-bold transition">キャンセル</button>
+                <button onclick="createWorker()" class="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-bold shadow-lg shadow-blue-900/50 transition">
+                    登録する
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Register Company (NEW) -->
+    <div id="companyModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+        <div class="bg-slate-800 w-full max-w-2xl rounded-2xl border border-slate-700 shadow-2xl overflow-hidden">
+            <div class="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
+                <h3 class="text-lg font-bold text-white">新規企業登録</h3>
+                <button onclick="toggleModal('companyModal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-8 space-y-5">
+                <div class="grid grid-cols-2 gap-5">
+                    <div class="col-span-2">
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-2">企業名 <span class="text-red-500">*</span></label>
+                        <input type="text" id="company-name" placeholder="例: 株式会社サンプル" class="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-green-500 outline-none">
+                    </div>
+                    
+                    <div class="col-span-2">
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-2">企業URL <span class="text-red-500">*</span></label>
+                        <input type="url" id="company-url" placeholder="https://example.com" class="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-green-500 outline-none">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-2">業種</label>
+                        <input type="text" id="company-industry" placeholder="例: IT・ソフトウェア" class="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-green-500 outline-none">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-2">問い合わせフォームURL</label>
+                        <input type="url" id="company-form-url" placeholder="https://example.com/contact" class="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-green-500 outline-none">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase mb-2">備考・メモ</label>
+                    <textarea id="company-notes" rows="3" placeholder="この企業に関する補足情報があれば記載してください" class="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-green-500 outline-none resize-none"></textarea>
+                </div>
+                
+                <div class="flex items-center gap-2 p-4 bg-green-900/20 border border-green-700/30 rounded-lg">
+                    <input type="checkbox" id="auto-analyze" class="w-4 h-4 rounded bg-slate-700 border-slate-600 text-green-600" checked>
+                    <label for="auto-analyze" class="text-sm text-green-300">
+                        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> 登録後すぐにAI解析を実行する
+                    </label>
+                </div>
+            </div>
+            <div class="p-6 border-t border-slate-700 bg-slate-900/50 flex justify-end gap-3">
+                <button onclick="toggleModal('companyModal')" class="px-4 py-2 text-slate-400 hover:text-white font-bold transition">キャンセル</button>
+                <button onclick="createCompany()" class="bg-green-600 hover:bg-green-500 text-white px-6 py-2 rounded-lg font-bold shadow-lg shadow-green-900/50 transition">
+                    <i class="fa-solid fa-plus mr-1"></i> 企業を登録
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: CSVからターゲットリスト作成 (NEW) -->
+    <div id="targetListCSVModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+        <div class="bg-slate-800 rounded-2xl border border-purple-500/30 shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="p-6 border-b border-slate-700 flex justify-between items-center bg-gradient-to-r from-purple-900/30 to-indigo-900/30">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-file-csv text-purple-400"></i> CSVからターゲットリスト作成
+                </h3>
+                <button onclick="toggleModal('targetListCSVModal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-slate-300 font-bold mb-2">ターゲットリスト名 <span class="text-red-500">*</span></label>
+                    <input type="text" id="csv-list-name" placeholder="例: 東京_IT企業_500件" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-purple-500 focus:outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-slate-300 font-bold mb-2">CSVファイルをアップロード <span class="text-red-500">*</span></label>
+                    <div class="border-2 border-dashed border-slate-600 rounded-lg p-8 text-center hover:border-purple-500 transition cursor-pointer" onclick="document.getElementById('csv-upload-input').click()">
+                        <i class="fa-solid fa-cloud-upload-alt text-4xl text-slate-500 mb-3"></i>
+                        <p class="text-slate-400 mb-1">クリックしてCSVファイルを選択</p>
+                        <p class="text-xs text-slate-500">必須列: 企業名, URL</p>
+                        <p id="csv-file-name" class="text-sm text-purple-400 mt-2 hidden"></p>
+                    </div>
+                    <input type="file" id="csv-upload-input" class="hidden" accept=".csv" onchange="handleTargetListCSV(this)">
+                </div>
+
+                <div class="bg-slate-900/50 p-4 rounded-lg">
+                    <p class="text-xs text-slate-400 mb-2"><i class="fa-solid fa-info-circle mr-1"></i> <strong>CSVフォーマット例</strong></p>
+                    <pre class="text-xs text-slate-500 bg-slate-950 p-3 rounded overflow-x-auto">企業名,URL,業種,従業員数
+株式会社サンプル,https://example.com,IT,100
+テスト株式会社,https://test.co.jp,製造,500</pre>
+                </div>
+
+                <div id="csv-preview" class="hidden">
+                    <p class="text-slate-300 font-bold mb-2">プレビュー</p>
+                    <div class="bg-slate-900 rounded-lg p-4 max-h-48 overflow-y-auto">
+                        <table class="w-full text-xs text-slate-400">
+                            <thead class="border-b border-slate-700">
+                                <tr id="csv-preview-header"></tr>
+                            </thead>
+                            <tbody id="csv-preview-body"></tbody>
+                        </table>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2"><span id="csv-row-count">0</span>件の企業データを検出</p>
+                </div>
+            </div>
+            <div class="p-6 border-t border-slate-700 bg-slate-900/50 flex justify-end gap-3">
+                <button onclick="toggleModal('targetListCSVModal')" class="px-4 py-2 text-slate-400 hover:text-white font-bold transition">キャンセル</button>
+                <button onclick="createTargetListFromCSV()" class="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2 rounded-lg font-bold shadow-lg shadow-purple-900/50 transition">
+                    <i class="fa-solid fa-layer-group mr-1"></i> リストを作成
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: 企業選択でターゲットリスト作成 (NEW) -->
+    <div id="targetListSelectModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-900/80 backdrop-blur-sm">
+        <div class="bg-slate-800 rounded-2xl border border-indigo-500/30 shadow-2xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="p-6 border-b border-slate-700 flex justify-between items-center bg-gradient-to-r from-indigo-900/30 to-blue-900/30">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-check-double text-indigo-400"></i> 企業選択でターゲットリスト作成
+                </h3>
+                <button onclick="toggleModal('targetListSelectModal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-4 flex-1 overflow-y-auto">
+                <div>
+                    <label class="block text-slate-300 font-bold mb-2">ターゲットリスト名 <span class="text-red-500">*</span></label>
+                    <input type="text" id="select-list-name" placeholder="例: 製造業_選抜100件" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-indigo-500 focus:outline-none">
+                </div>
+
+                <div class="flex items-center justify-between bg-slate-900/50 p-3 rounded-lg">
+                    <div class="flex items-center gap-4">
+                        <label class="flex items-center gap-2 text-sm text-slate-300">
+                            <input type="checkbox" id="select-all-companies" onchange="toggleSelectAllCompanies()" class="w-4 h-4 rounded bg-slate-700 border-slate-600 text-indigo-600">
+                            すべて選択
+                        </label>
+                        <span class="text-xs text-slate-500">|</span>
+                        <input type="text" id="company-filter" placeholder="企業名で絞り込み..." class="px-3 py-1 bg-slate-800 border border-slate-700 rounded text-sm text-white focus:border-indigo-500 focus:outline-none" oninput="filterCompanyList()">
+                    </div>
+                    <p class="text-sm text-indigo-400"><span id="selected-count">0</span>件選択中</p>
+                </div>
+
+                <div class="bg-slate-900 rounded-lg border border-slate-700 max-h-96 overflow-y-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-slate-800 sticky top-0 border-b border-slate-700">
+                            <tr>
+                                <th class="px-4 py-3 text-left"><input type="checkbox" class="hidden"></th>
+                                <th class="px-4 py-3 text-left text-slate-400 font-medium">企業名</th>
+                                <th class="px-4 py-3 text-left text-slate-400 font-medium">URL</th>
+                                <th class="px-4 py-3 text-left text-slate-400 font-medium">ステータス</th>
+                            </tr>
+                        </thead>
+                        <tbody id="company-select-list">
+                            <!-- JavaScriptで動的生成 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="p-6 border-t border-slate-700 bg-slate-900/50 flex justify-end gap-3">
+                <button onclick="toggleModal('targetListSelectModal')" class="px-4 py-2 text-slate-400 hover:text-white font-bold transition">キャンセル</button>
+                <button onclick="createTargetListFromSelection()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg font-bold shadow-lg shadow-indigo-900/50 transition">
+                    <i class="fa-solid fa-layer-group mr-1"></i> リストを作成 (<span id="selected-count-btn">0</span>件)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 transform translate-y-20 opacity-0 transition-all duration-300 z-50">
+        <div class="bg-indigo-600 text-white px-6 py-3 rounded-lg shadow-xl flex items-center gap-3">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <div>
+                <p class="font-bold">Notification</p>
+                <p id="toast-msg" class="text-sm text-indigo-200">Message</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Manager -->
+    <script src="js/data-manager.js"></script>
+    <script src="js/api-client.js"></script>
+    
+    <script>
+        // ========================================
+        // 初期化
+        // ========================================
+        let dataManager;
+        let apiConnected = false;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                console.log('Initializing DataManager...');
+                dataManager = new DataManager();
+                console.log('DataManager initialized successfully');
+                
+                // API接続テスト
+                testAPIConnection();
+                
+                refreshAllViews();
+                initializeChart();
+            } catch (error) {
+                console.error('Failed to initialize DataManager:', error);
+            }
+        });
+
+        async function testAPIConnection() {
+            try {
+                const statusEl = document.getElementById('api-status');
+                statusEl.classList.remove('hidden');
+                
+                console.log('Testing API connection...');
+                const health = await apiClient.healthCheck();
+                console.log('✅ API Connected:', health);
+                apiConnected = true;
+                
+                // 成功表示
+                statusEl.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                        <span class="text-xs text-green-300">API接続完了</span>
+                    </div>
+                `;
+                statusEl.classList.remove('border-slate-700');
+                statusEl.classList.add('border-green-700', 'bg-green-900/20');
+                
+                showToast('✅ バックエンドAPIに接続しました');
+                
+                // 3秒後に非表示
+                setTimeout(() => {
+                    statusEl.classList.add('hidden');
+                }, 3000);
+                
+            } catch (error) {
+                console.warn('⚠️ API接続失敗（LocalStorageモードで動作）:', error.message);
+                apiConnected = false;
+                
+                const statusEl = document.getElementById('api-status');
+                statusEl.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-slate-500"></div>
+                        <span class="text-xs text-slate-400">LocalStorageモード</span>
+                    </div>
+                `;
+                statusEl.classList.remove('border-slate-700');
+                statusEl.classList.add('border-slate-600');
+                
+                // 5秒後に非表示
+                setTimeout(() => {
+                    statusEl.classList.add('hidden');
+                }, 5000);
+            }
+        }
+
+        let sendChart = null;
+
+        function refreshAllViews() {
+            if (!dataManager) {
+                console.log('DataManager not ready yet, skipping refresh');
+                return;
+            }
+            renderOverview();
+            renderProjects();
+            renderCompanyDB();
+            renderProductDB();
+            renderWorkerDB();
+        }
+
+        // ========================================
+        // ビュー切り替え
+        // ========================================
+        function switchView(viewId) {
+            document.querySelectorAll('aside nav button').forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-lg');
+                btn.classList.add('text-slate-400', 'hover:bg-slate-800', 'hover:text-white');
+            });
+            const activeBtn = document.getElementById('nav-' + viewId);
+            activeBtn.classList.remove('text-slate-400', 'hover:bg-slate-800');
+            activeBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-lg');
+
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById('view-' + viewId).classList.remove('hidden');
+
+            const titles = {
+                'overview': '全体サマリー',
+                'projects': 'プロジェクト管理',
+                'db-company': '企業リストデータベース',
+                'db-project': '案件・商材データベース',
+                'db-worker': '作業者データベース'
+            };
+            document.getElementById('page-title').innerText = titles[viewId];
+            
+            // ビュー表示時に再レンダリング
+            if (viewId === 'overview') renderOverview();
+            if (viewId === 'projects') renderProjects();
+            if (viewId === 'db-company') renderCompanyDB();
+            if (viewId === 'db-project') renderProductDB();
+            if (viewId === 'db-worker') renderWorkerDB();
+        }
+
+        // ========================================
+        // 全体サマリー
+        // ========================================
+        function renderOverview() {
+            if (!dataManager) {
+                console.log('DataManager not ready in renderOverview');
+                return;
+            }
+            const stats = dataManager.getStats();
+            const projects = dataManager.getProjects();
+            const workers = dataManager.getWorkers();
+            const companies = dataManager.getCompanies();
+            
+            // 統計カード更新
+            document.getElementById('overview-sent-today').textContent = stats.totalSentToday;
+            document.getElementById('overview-active-projects').textContent = projects.filter(p => p.status === 'active').length;
+            document.getElementById('overview-pending-ai').textContent = stats.pendingAIAnalysis;
+            document.getElementById('overview-active-workers').textContent = workers.filter(w => w.status === 'active').length;
+
+            // ワーカーランキング生成
+            const activeWorkers = workers.filter(w => w.status === 'active')
+                .sort((a, b) => b.monthlyPoints - a.monthlyPoints);
+            
+            const rankingHTML = activeWorkers.map((worker, index) => {
+                const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '';
+                return `
+                    <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-700/30 hover:bg-slate-700/50 transition">
+                        <div class="text-2xl">${medal || (index + 1)}</div>
+                        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+                            ${worker.avatar}
+                        </div>
+                        <div class="flex-1">
+                            <p class="font-bold text-slate-200 text-sm">${worker.name}</p>
+                            <p class="text-xs text-slate-400">${worker.rank} Rank</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="font-bold text-indigo-300">${worker.monthlyPoints} pt</p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            document.querySelector('#view-overview .overflow-y-auto.space-y-3').innerHTML = rankingHTML;
+        }
+
+        function initializeChart() {
+            const ctx = document.getElementById('sendChart').getContext('2d');
+            sendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['12/07', '12/08', '12/09', '12/10', '12/11', '12/12', 'Today'],
+                    datasets: [{
+                        label: '送信数',
+                        data: [850, 920, 880, 1050, 1100, 980, 1245],
+                        borderColor: '#6366f1', 
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                    }
+                }
+            });
+        }
+
+        // ========================================
+        // プロジェクト管理
+        // ========================================
+        function renderProjects() {
+            if (!dataManager) {
+                console.log('DataManager not ready in renderProjects');
+                return;
+            }
+            const projects = dataManager.getProjects();
+            const products = dataManager.getProducts();
+            const workers = dataManager.getWorkers();
+            
+            const projectCardsHTML = projects.map(project => {
+                const product = products.find(p => p.id === project.productId);
+                const assignedWorkerNames = project.assignedWorkers
+                    .map(wId => workers.find(w => w.id === wId)?.name || '不明')
+                    .join(', ');
+                
+                const progress = (project.completed / project.totalTargets * 100).toFixed(0);
+                const statusBadge = {
+                    'active': '<span class="px-3 py-1 text-xs bg-green-500/20 text-green-300 rounded-full font-bold">進行中</span>',
+                    'analyzing': '<span class="px-3 py-1 text-xs bg-blue-500/20 text-blue-300 rounded-full font-bold">AI解析中</span>',
+                    'completed': '<span class="px-3 py-1 text-xs bg-slate-500/20 text-slate-300 rounded-full font-bold">完了</span>'
+                }[project.status];
+
+                return `
+                    <div class="bg-slate-800 rounded-2xl border border-slate-700 shadow-lg overflow-hidden flex flex-col hover:border-indigo-500/50 transition group ${project.status === 'completed' ? 'opacity-75' : ''}">
+                        <div class="p-6 border-b border-slate-700/50 bg-slate-800 relative">
+                            <div class="flex justify-between items-start mb-2">
+                                <h4 class="font-bold text-white text-lg group-hover:text-indigo-300 transition">${project.name}</h4>
+                                ${statusBadge}
+                            </div>
+                            <p class="text-sm text-slate-400 mb-3">商材: ${product?.name || '不明'}</p>
+                            <div class="flex gap-2 text-xs">
+                                <span class="px-2 py-1 bg-slate-700 text-slate-300 rounded">担当: ${assignedWorkerNames}</span>
+                                <span class="px-2 py-1 bg-slate-700 text-slate-300 rounded">報酬: ${project.rewardPerTask}pt/件</span>
+                            </div>
+                        </div>
+                        <div class="p-6 flex-1 flex flex-col justify-between">
+                            <div>
+                                <div class="flex justify-between text-sm mb-2">
+                                    <span class="text-slate-400">進捗</span>
+                                    <span class="font-bold text-slate-200">${project.completed} / ${project.totalTargets} 件 (${progress}%)</span>
+                                </div>
+                                <div class="w-full h-2 bg-slate-700 rounded-full overflow-hidden mb-4">
+                                    <div class="h-full bg-gradient-to-r from-indigo-500 to-blue-500 transition-all" style="width: ${progress}%"></div>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                ${project.status === 'active' ? `
+                                    <button onclick="viewProjectDetail(${project.id})" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-2 rounded-lg text-sm font-bold transition">
+                                        詳細表示
+                                    </button>
+                                ` : ''}
+                                ${project.status === 'analyzing' ? `
+                                    <button class="flex-1 bg-blue-500/20 text-blue-300 py-2 rounded-lg text-sm font-bold cursor-wait">
+                                        AI解析中...
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            document.querySelector('#view-projects .grid').innerHTML = projectCardsHTML;
+        }
+
+        function viewProjectDetail(projectId) {
+            const project = dataManager.getProjectById(projectId);
+            alert(`プロジェクト詳細:\n${JSON.stringify(project, null, 2)}`);
+        }
+
+        // ========================================
+        // 企業リストDB
+        // ========================================
+        function renderCompanyDB() {
+            try {
+                console.log('renderCompanyDB called');
+                if (!dataManager) {
+                    console.error('DataManager not initialized in renderCompanyDB');
+                    return;
+                }
+                const companies = dataManager.getCompanies();
+                console.log('Companies:', companies.length);
+                
+                const analyzedCount = companies.filter(c => c.analyzed).length;
+                const pendingCount = companies.filter(c => !c.analyzed).length;
+                
+                // 統計更新
+                const totalEl = document.getElementById('company-total');
+                const analyzedEl = document.getElementById('company-analyzed');
+                const pendingEl = document.getElementById('company-pending');
+                
+                if (!totalEl || !analyzedEl || !pendingEl) {
+                    console.error('Stats elements not found!');
+                    return;
+                }
+                
+                totalEl.textContent = companies.length;
+                const percentage = companies.length > 0 ? Math.round(analyzedCount/companies.length*100) : 0;
+                analyzedEl.innerHTML = `${analyzedCount} <span class="text-sm font-normal text-slate-500">/ ${percentage}%</span>`;
+                pendingEl.textContent = pendingCount;
+                
+                // テーブル生成
+                const tableHTML = companies.map(company => `
+                <tr class="border-b border-slate-700 hover:bg-slate-700/30 transition">
+                    <td class="px-4 py-3 text-slate-300 font-mono">#${company.id}</td>
+                    <td class="px-4 py-3">
+                        <p class="font-bold text-slate-200">${company.name}</p>
+                        <p class="text-xs text-slate-500">${company.industry}</p>
+                    </td>
+                    <td class="px-4 py-3">
+                        <a href="${company.url}" target="_blank" class="text-indigo-400 hover:underline text-xs">${company.url}</a>
+                    </td>
+                    <td class="px-4 py-3">
+                        ${company.analyzed ? 
+                            '<span class="px-2 py-1 bg-green-500/20 text-green-300 rounded text-xs font-bold">解析済み</span>' :
+                            '<span class="px-2 py-1 bg-yellow-500/20 text-yellow-300 rounded text-xs font-bold">未解析</span>'
+                        }
+                    </td>
+                    <td class="px-4 py-3 text-xs text-slate-500">${company.createdAt}</td>
+                    <td class="px-4 py-3">
+                        <div class="flex gap-2">
+                            ${!company.analyzed ? 
+                                `<button onclick="runSingleAnalysis(${company.id})" class="px-3 py-1 bg-indigo-500 hover:bg-indigo-400 text-white rounded text-xs font-bold transition">
+                                    <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>解析
+                                </button>` : ''
+                            }
+                            <button onclick="viewAnalysisDetail(${company.id})" class="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-slate-300 rounded text-xs font-bold transition">
+                                <i class="fa-solid fa-eye mr-1"></i>詳細
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+            
+            const tableBody = document.querySelector('#view-db-company table tbody');
+            if (!tableBody) {
+                console.error('Table tbody not found!');
+                return;
+            }
+            tableBody.innerHTML = tableHTML;
+            console.log('Company table rendered successfully');
+        } catch (error) {
+            console.error('Error in renderCompanyDB:', error);
+        }
+    }
+    
+    function runSingleAnalysis(id) {
+            showToast(`ID #${id} の解析を実行中...`);
+            
+            setTimeout(() => {
+                const company = dataManager.getCompanyById(id);
+                dataManager.updateCompany(id, {
+                    analyzed: true,
+                    analysisData: {
+                        businessDescription: `${company.industry}を中心とした事業展開。`,
+                        strengths: ['実績豊富', '高品質サービス', '充実したサポート'],
+                        targetCustomers: '中小企業',
+                        keyTopics: ['効率化', 'コスト削減', 'DX推進']
+                    }
+                });
+                showToast(`解析完了: ${company.name}`);
+                renderCompanyDB();
+            }, 1500);
+        }
+
+        function viewAnalysisDetail(id) {
+            const company = dataManager.getCompanyById(id);
+            if (company && company.analysisData) {
+                let message = `【${company.name} - AI解析結果】\n\n` +
+                    `事業内容: ${company.analysisData.businessDescription}\n\n` +
+                    `強み:\n- ${company.analysisData.strengths.join('\n- ')}\n\n` +
+                    `ターゲット顧客: ${company.analysisData.targetCustomers}\n\n` +
+                    `キートピック: ${company.analysisData.keyTopics.join(', ')}`;
+                
+                if (company.notes) {
+                    message += `\n\n--- 備考 ---\n${company.notes}`;
+                }
+                
+                alert(message);
+            } else if (company) {
+                let message = `【${company.name} - 企業情報】\n\n` +
+                    `URL: ${company.url}\n` +
+                    `業種: ${company.industry}\n` +
+                    `登録日: ${company.createdAt}`;
+                
+                if (company.formUrl) {
+                    message += `\nフォームURL: ${company.formUrl}`;
+                }
+                
+                if (company.notes) {
+                    message += `\n\n--- 備考 ---\n${company.notes}`;
+                }
+                
+                alert(message);
+            }
+        }
+
+        function runBatchAnalysis() {
+            if(!confirm("データベース内の「未解析」企業リストを一括でAI解析します。\n処理には時間がかかる場合がありますが、実行しますか？")) return;
+            
+            const companies = dataManager.getCompanies();
+            const pending = companies.filter(c => !c.analyzed);
+            
+            showToast(`一括解析を開始しました (${pending.length}件)`);
+            
+            let completed = 0;
+            const interval = setInterval(() => {
+                if (completed >= pending.length) {
+                    clearInterval(interval);
+                    showToast("一括解析が完了しました");
+                    renderCompanyDB();
+                    return;
+                }
+                
+                const company = pending[completed];
+                dataManager.updateCompany(company.id, {
+                    analyzed: true,
+                    analysisData: {
+                        businessDescription: `${company.industry}を中心とした事業展開。`,
+                        strengths: ['実績豊富', '高品質サービス', '充実したサポート'],
+                        targetCustomers: '中小企業',
+                        keyTopics: ['効率化', 'コスト削減', 'DX推進']
+                    }
+                });
+                completed++;
+                
+                if (completed % 5 === 0) {
+                    showToast(`解析進行中: ${completed}/${pending.length}`);
+                    renderCompanyDB();
+                }
+            }, 300);
+        }
+
+        function handleCSVImport(input) {
+            if (input.files && input.files[0]) {
+                const fileName = input.files[0].name;
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    const csvData = dataManager.parseCSV(e.target.result);
+                    
+                    csvData.forEach(row => {
+                        if (row.name && row.url) {
+                            dataManager.addCompany({
+                                name: row.name,
+                                url: row.url,
+                                industry: row.industry || '未分類',
+                                formUrl: row.formUrl || null,
+                                listId: 1
+                            });
+                        }
+                    });
+                    
+                    showToast(`読み込み完了: ${fileName} (${csvData.length}件)`);
+                    renderCompanyDB();
+                };
+                
+                reader.readAsText(input.files[0]);
+                input.value = '';
+            }
+        }
+
+        // ========================================
+        // 案件・商材DB
+        // ========================================
+        function renderProductDB() {
+            if (!dataManager) {
+                console.log('DataManager not ready in renderProductDB');
+                return;
+            }
+            const products = dataManager.getProducts();
+            
+            const productCardsHTML = products.map(product => `
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700 hover:border-indigo-500 transition cursor-pointer group">
+                    <div class="flex justify-between items-start mb-3">
+                        <h4 class="font-bold text-white text-lg group-hover:text-indigo-300 transition">${product.name}</h4>
+                        <span class="px-2 py-1 bg-green-500/20 text-green-300 rounded text-xs font-bold">${product.status === 'active' ? 'アクティブ' : '停止中'}</span>
+                    </div>
+                    <p class="text-sm text-slate-400 mb-3">${product.description}</p>
+                    <div class="space-y-1 text-xs text-slate-500">
+                        <p><strong>対象業種:</strong> ${product.targetIndustry}</p>
+                        <p><strong>強み:</strong> ${product.strengths.join(', ')}</p>
+                    </div>
+                    <div class="mt-4 flex gap-2">
+                        <button onclick="editProduct(${product.id})" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-2 rounded text-xs font-bold">編集</button>
+                        <button onclick="deleteProduct(${product.id})" class="px-4 bg-red-600 hover:bg-red-500 text-white py-2 rounded text-xs font-bold">削除</button>
+                    </div>
+                </div>
+            `).join('');
+            
+            document.querySelector('#view-db-project .grid').innerHTML = productCardsHTML;
+        }
+
+        function editProduct(id) {
+            const product = dataManager.getProductById(id);
+            alert(`商材編集機能（実装予定）\n\n${JSON.stringify(product, null, 2)}`);
+        }
+
+        function deleteProduct(id) {
+            if (confirm('この商材を削除しますか？')) {
+                dataManager.deleteProduct(id);
+                showToast('商材を削除しました');
+                renderProductDB();
+            }
+        }
+
+        // ========================================
+        // 作業者DB
+        // ========================================
+        function renderWorkerDB() {
+            if (!dataManager) {
+                console.log('DataManager not ready in renderWorkerDB');
+                return;
+            }
+            const workers = dataManager.getWorkers();
+            
+            const activeCount = workers.filter(w => w.status === 'active').length;
+            const inactiveCount = workers.filter(w => w.status === 'inactive').length;
+            
+            // 統計更新
+            document.getElementById('worker-total').innerHTML = `${workers.length} <span class="text-sm text-slate-500 font-normal">名</span>`;
+            document.getElementById('worker-active').innerHTML = `${activeCount} <span class="text-sm text-slate-500 font-normal">名</span>`;
+            document.getElementById('worker-inactive').innerHTML = `${inactiveCount} <span class="text-sm text-slate-500 font-normal">名</span>`;
+            
+            // テーブル生成
+            const tableHTML = workers.map(worker => `
+                <tr class="border-b border-slate-700 hover:bg-slate-700/30 transition">
+                    <td class="px-4 py-3 text-slate-300 font-mono">#${worker.id}</td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xs">
+                                ${worker.avatar}
+                            </div>
+                            <div>
+                                <p class="font-bold text-slate-200">${worker.name}</p>
+                                <p class="text-xs text-slate-500">${worker.email}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3">
+                        ${worker.status === 'active' ? 
+                            '<span class="px-2 py-1 bg-green-500/20 text-green-300 rounded text-xs font-bold">稼働中</span>' :
+                            '<span class="px-2 py-1 bg-slate-500/20 text-slate-400 rounded text-xs font-bold">停止</span>'
+                        }
+                    </td>
+                    <td class="px-4 py-3 text-slate-300">${worker.rank}</td>
+                    <td class="px-4 py-3 text-slate-300">${worker.completedTasks} 件</td>
+                    <td class="px-4 py-3 text-slate-300">${worker.totalPoints.toLocaleString()} pt</td>
+                    <td class="px-4 py-3 text-xs text-slate-500">${worker.joinedAt}</td>
+                    <td class="px-4 py-3">
+                        <button onclick="toggleWorkerStatus(${worker.id})" class="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-slate-300 rounded text-xs font-bold transition">
+                            ${worker.status === 'active' ? '停止' : '再開'}
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            
+            document.querySelector('#view-db-worker table tbody').innerHTML = tableHTML;
+        }
+
+        function toggleWorkerStatus(id) {
+            const worker = dataManager.getWorkerById(id);
+            const newStatus = worker.status === 'active' ? 'inactive' : 'active';
+            dataManager.updateWorker(id, { status: newStatus });
+            showToast(`${worker.name} を${newStatus === 'active' ? '再開' : '停止'}しました`);
+            renderWorkerDB();
+        }
+
+        function handleWorkerCSVImport(input) {
+            if (input.files && input.files[0]) {
+                const fileName = input.files[0].name;
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    const csvData = dataManager.parseCSV(e.target.result);
+                    
+                    csvData.forEach(row => {
+                        if (row.name && row.email) {
+                            dataManager.addWorker({
+                                name: row.name,
+                                email: row.email,
+                                avatar: row.name.substring(0, 2).toUpperCase()
+                            });
+                        }
+                    });
+                    
+                    showToast(`Workerリスト読み込み完了: ${fileName} (${csvData.length}件)`);
+                    renderWorkerDB();
+                };
+                
+                reader.readAsText(input.files[0]);
+                input.value = '';
+            }
+        }
+
+        // ========================================
+        // モーダル
+        // ========================================
+        function toggleModal(id) {
+            const modal = document.getElementById(id);
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function createProject() {
+            const projectName = document.getElementById('project-name').value;
+            const targetListId = document.getElementById('project-target-list').value;
+            const productId = document.getElementById('project-product').value;
+            
+            if (!projectName) {
+                alert('プロジェクト名を入力してください');
+                return;
+            }
+            
+            if (!targetListId) {
+                alert('ターゲットリストを選択してください');
+                return;
+            }
+            
+            if (!productId) {
+                alert('商材・案件を選択してください');
+                return;
+            }
+            
+            // 選択されたワーカーを取得
+            const selectedWorkers = [];
+            document.querySelectorAll('#project-workers-list input[type="checkbox"]:checked').forEach(cb => {
+                selectedWorkers.push(parseInt(cb.dataset.workerId));
+            });
+            
+            // ターゲットリストから企業数を取得
+            const targetList = targetLists.find(tl => tl.id === parseInt(targetListId));
+            const totalTargets = targetList ? targetList.companies.length : 0;
+            
+            const newProject = dataManager.addProject({
+                name: projectName,
+                companyListId: parseInt(targetListId),
+                productId: parseInt(productId),
+                assignedWorkers: selectedWorkers,
+                totalTargets: totalTargets,
+                rewardPerTask: 50,
+                deadline: '2026-01-31'
+            });
+            
+            toggleModal('projectModal');
+            showToast(`✅ プロジェクト「${projectName}」を作成しました（対象: ${totalTargets}社）`);
+            
+            // フォームをクリア
+            document.getElementById('project-name').value = '';
+            document.getElementById('project-target-list').value = '';
+            document.getElementById('project-product').value = '';
+            
+            // AI解析シミュレーション
+            setTimeout(() => {
+                dataManager.updateProject(newProject.id, {
+                    status: 'active',
+                    aiAnalysisCompleted: true
+                });
+                showToast("🤖 AI解析が完了しました");
+                renderProjects();
+            }, 3000);
+            
+            switchView('projects');
+            renderProjects();
+        }
+
+        function createWorker() {
+            const name = document.querySelector('#workerModal input[placeholder="山田 太郎"]').value;
+            const email = document.querySelector('#workerModal input[type="email"]').value;
+            
+            if (!name || !email) {
+                alert('名前とメールアドレスを入力してください');
+                return;
+            }
+            
+            dataManager.addWorker({
+                name: name,
+                email: email,
+                avatar: name.substring(0, 2).toUpperCase()
+            });
+            
+            toggleModal('workerModal');
+            showToast(`新規ワーカー ${name} を登録し、招待メールを送信しました`);
+            renderWorkerDB();
+        }
+
+        function createCompany() {
+            if (!dataManager) {
+                console.error('DataManager not initialized');
+                alert('システムの初期化中です。少々お待ちください。');
+                return;
+            }
+            
+            const name = document.getElementById('company-name').value;
+            const url = document.getElementById('company-url').value;
+            const industry = document.getElementById('company-industry').value;
+            const formUrl = document.getElementById('company-form-url').value;
+            const notes = document.getElementById('company-notes').value;
+            const autoAnalyze = document.getElementById('auto-analyze').checked;
+            
+            if (!name || !url) {
+                alert('企業名とURLは必須項目です');
+                return;
+            }
+            
+            const companyData = {
+                name: name,
+                url: url,
+                industry: industry || '未分類',
+                formUrl: formUrl || null,
+                notes: notes || '',
+                listId: 1
+            };
+            
+            // API接続時はバックエンドへ送信
+            if (apiConnected) {
+                createCompanyViaAPI(companyData, autoAnalyze);
+            } else {
+                // LocalStorageモード
+                const newCompany = dataManager.addCompany(companyData);
+                
+                // フォームクリア
+                clearCompanyForm();
+                
+                toggleModal('companyModal');
+                showToast(`企業「${name}」を登録しました`);
+                
+                // AI自動解析が有効な場合
+                if (autoAnalyze) {
+                    showToast(`AI解析を開始します: ${name}`);
+                    setTimeout(() => {
+                        runSingleAnalysis(newCompany.id);
+                    }, 1000);
+                }
+                
+                renderCompanyDB();
+                switchView('db-company');
+            }
+        }
+        
+        async function createCompanyViaAPI(companyData, autoAnalyze) {
+            try {
+                showToast('企業を登録中...');
+                
+                const result = await apiClient.createCompany(companyData);
+                console.log('Company created:', result);
+                
+                // LocalStorageにも同期（ハイブリッドモード）
+                const newCompany = dataManager.addCompany({
+                    ...companyData,
+                    id: result.company.id
+                });
+                
+                clearCompanyForm();
+                toggleModal('companyModal');
+                showToast(`✅ 企業「${companyData.name}」を登録しました（API）`);
+                
+                // AI自動解析
+                if (autoAnalyze) {
+                    showToast(`AI解析をリクエスト中: ${companyData.name}`);
+                    try {
+                        await apiClient.analyzeCompany(result.company.id);
+                        showToast('✅ AI解析を開始しました');
+                    } catch (error) {
+                        console.warn('AI解析エラー:', error);
+                        showToast('⚠️ AI解析は後ほど実行されます');
+                    }
+                }
+                
+                renderCompanyDB();
+                switchView('db-company');
+                
+            } catch (error) {
+                console.error('API Error:', error);
+                showToast(`❌ エラー: ${error.message}`);
+            }
+        }
+        
+        function clearCompanyForm() {
+            document.getElementById('company-name').value = '';
+            document.getElementById('company-url').value = '';
+            document.getElementById('company-industry').value = '';
+            document.getElementById('company-form-url').value = '';
+            document.getElementById('company-notes').value = '';
+            document.getElementById('auto-analyze').checked = true;
+        }
+
+        function createWorker() {
+            const name = document.getElementById('worker-name').value;
+            const email = document.getElementById('worker-email').value;
+            
+            if (!name || !email) {
+                alert('名前とメールアドレスは必須項目です');
+                return;
+            }
+            
+            dataManager.addWorker({
+                name: name,
+                email: email,
+                avatar: name.substring(0, 2).toUpperCase()
+            });
+            
+            toggleModal('workerModal');
+            showToast(`新規ワーカー ${name} を登録し、招待メールを送信しました`);
+            renderWorkerDB();
+        }
+
+        // ========================================
+        // ユーティリティ
+        // ========================================
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // ========================================
+        // ターゲットリスト管理機能
+        // ========================================
+        let targetLists = [];
+        let csvData = null;
+        let selectedCompanyIds = new Set();
+
+        // ターゲットリスト一覧を表示
+        function renderTargetLists() {
+            const container = document.getElementById('target-lists-container');
+            
+            if (targetLists.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-3 text-center py-12 text-slate-500">
+                        <i class="fa-solid fa-layer-group text-4xl mb-3 opacity-50"></i>
+                        <p>まだターゲットリストがありません</p>
+                        <p class="text-xs mt-1">CSVアップロードまたは企業選択でリストを作成してください</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = targetLists.map(list => `
+                <div class="bg-slate-800 rounded-lg border border-slate-700 p-4 hover:border-purple-500 transition group">
+                    <div class="flex justify-between items-start mb-3">
+                        <h5 class="font-bold text-white text-sm group-hover:text-purple-400 transition">${list.name}</h5>
+                        <button onclick="deleteTargetList(${list.id})" class="text-slate-500 hover:text-red-400 transition">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div class="text-xs text-slate-400">
+                            <i class="fa-solid fa-building mr-1"></i> ${list.companies.length}件
+                        </div>
+                        <div class="text-xs text-slate-500">
+                            ${new Date(list.createdAt).toLocaleDateString('ja-JP')}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // CSVファイルの処理
+        function handleTargetListCSV(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            document.getElementById('csv-file-name').textContent = `📄 ${file.name}`;
+            document.getElementById('csv-file-name').classList.remove('hidden');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const lines = text.split('\n').filter(line => line.trim());
+                
+                // ヘッダー行を解析
+                const headers = lines[0].split(',').map(h => h.trim());
+                
+                // データ行を解析
+                const rows = lines.slice(1).map(line => {
+                    const values = line.split(',').map(v => v.trim());
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header] = values[index] || '';
+                    });
+                    return row;
+                });
+
+                csvData = { headers, rows };
+                
+                // プレビュー表示
+                displayCSVPreview(headers, rows);
+            };
+            reader.readAsText(file, 'UTF-8');
+        }
+
+        function displayCSVPreview(headers, rows) {
+            const preview = document.getElementById('csv-preview');
+            const headerRow = document.getElementById('csv-preview-header');
+            const body = document.getElementById('csv-preview-body');
+            
+            preview.classList.remove('hidden');
+            
+            // ヘッダー
+            headerRow.innerHTML = headers.map(h => `<th class="px-2 py-1 text-left">${h}</th>`).join('');
+            
+            // 最初の5行のみ表示
+            body.innerHTML = rows.slice(0, 5).map(row => `
+                <tr class="border-t border-slate-800">
+                    ${headers.map(h => `<td class="px-2 py-1">${row[h]}</td>`).join('')}
+                </tr>
+            `).join('');
+            
+            document.getElementById('csv-row-count').textContent = rows.length;
+        }
+
+        // CSVからターゲットリスト作成
+        async function createTargetListFromCSV() {
+            const listName = document.getElementById('csv-list-name').value;
+            
+            if (!listName) {
+                alert('ターゲットリスト名を入力してください');
+                return;
+            }
+            
+            if (!csvData) {
+                alert('CSVファイルをアップロードしてください');
+                return;
+            }
+
+            // 企業名とURLの列を特定
+            const nameCol = csvData.headers.find(h => h.includes('企業名') || h.includes('会社名') || h.includes('名称'));
+            const urlCol = csvData.headers.find(h => h.includes('URL') || h.includes('url') || h.includes('Url'));
+
+            if (!nameCol || !urlCol) {
+                alert('CSVに「企業名」と「URL」の列が必要です');
+                return;
+            }
+
+            // 企業データをDataManagerに追加
+            const companyIds = [];
+            for (const row of csvData.rows) {
+                if (!row[nameCol] || !row[urlCol]) continue;
+                
+                const companyData = {
+                    name: row[nameCol],
+                    url: row[urlCol],
+                    industry: row['業種'] || row['産業'] || '未分類',
+                    notes: `CSVインポート: ${listName}`
+                };
+
+                try {
+                    if (apiConnected) {
+                        const result = await apiClient.createCompany(companyData);
+                        companyIds.push(result.id);
+                    } else {
+                        const id = dataManager.addCompany(companyData);
+                        companyIds.push(id);
+                    }
+                } catch (error) {
+                    console.error('Failed to create company:', error);
+                }
+            }
+
+            // ターゲットリスト作成
+            const newList = {
+                id: Date.now(),
+                name: listName,
+                companies: companyIds,
+                createdAt: new Date().toISOString()
+            };
+
+            targetLists.push(newList);
+            localStorage.setItem('targetLists', JSON.stringify(targetLists));
+
+            toggleModal('targetListCSVModal');
+            showToast(`✅ ターゲットリスト「${listName}」を作成しました（${companyIds.length}件）`);
+            
+            // リセット
+            document.getElementById('csv-list-name').value = '';
+            document.getElementById('csv-upload-input').value = '';
+            document.getElementById('csv-file-name').classList.add('hidden');
+            document.getElementById('csv-preview').classList.add('hidden');
+            csvData = null;
+
+            renderTargetLists();
+            refreshAllViews();
+        }
+
+        // 企業選択モーダルを開く
+        function renderCompanySelectList() {
+            const tbody = document.getElementById('company-select-list');
+            const companies = dataManager ? dataManager.getCompanies() : [];
+            
+            if (companies.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="px-4 py-8 text-center text-slate-500">
+                            <i class="fa-solid fa-building text-3xl mb-2 opacity-50"></i>
+                            <p>企業データがありません</p>
+                            <p class="text-xs mt-1">先に企業を登録してください</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = companies.map(company => `
+                <tr class="border-t border-slate-800 hover:bg-slate-800/50 transition">
+                    <td class="px-4 py-3">
+                        <input type="checkbox" class="company-select-checkbox w-4 h-4 rounded bg-slate-700 border-slate-600 text-indigo-600" 
+                            data-company-id="${company.id}" 
+                            onchange="updateSelectedCount()"
+                            ${selectedCompanyIds.has(company.id) ? 'checked' : ''}>
+                    </td>
+                    <td class="px-4 py-3 text-white">${company.name}</td>
+                    <td class="px-4 py-3 text-slate-400 text-xs">${company.url}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 rounded text-xs ${company.status === 'analyzed' ? 'bg-indigo-900/30 text-indigo-400' : 'bg-slate-700 text-slate-400'}">
+                            ${company.status === 'analyzed' ? '解析済み' : '未解析'}
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function toggleSelectAllCompanies() {
+            const checkboxes = document.querySelectorAll('.company-select-checkbox');
+            const selectAll = document.getElementById('select-all-companies').checked;
+            
+            checkboxes.forEach(cb => {
+                cb.checked = selectAll;
+                const companyId = parseInt(cb.dataset.companyId);
+                if (selectAll) {
+                    selectedCompanyIds.add(companyId);
+                } else {
+                    selectedCompanyIds.delete(companyId);
+                }
+            });
+            
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            selectedCompanyIds.clear();
+            document.querySelectorAll('.company-select-checkbox:checked').forEach(cb => {
+                selectedCompanyIds.add(parseInt(cb.dataset.companyId));
+            });
+            
+            const count = selectedCompanyIds.size;
+            document.getElementById('selected-count').textContent = count;
+            document.getElementById('selected-count-btn').textContent = count;
+        }
+
+        function filterCompanyList() {
+            const filter = document.getElementById('company-filter').value.toLowerCase();
+            const rows = document.querySelectorAll('#company-select-list tr');
+            
+            rows.forEach(row => {
+                const companyName = row.querySelector('td:nth-child(2)')?.textContent.toLowerCase() || '';
+                if (companyName.includes(filter)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        function createTargetListFromSelection() {
+            const listName = document.getElementById('select-list-name').value;
+            
+            if (!listName) {
+                alert('ターゲットリスト名を入力してください');
+                return;
+            }
+            
+            if (selectedCompanyIds.size === 0) {
+                alert('少なくとも1社を選択してください');
+                return;
+            }
+
+            const newList = {
+                id: Date.now(),
+                name: listName,
+                companies: Array.from(selectedCompanyIds),
+                createdAt: new Date().toISOString()
+            };
+
+            targetLists.push(newList);
+            localStorage.setItem('targetLists', JSON.stringify(targetLists));
+
+            toggleModal('targetListSelectModal');
+            showToast(`✅ ターゲットリスト「${listName}」を作成しました（${selectedCompanyIds.size}件）`);
+            
+            // リセット
+            document.getElementById('select-list-name').value = '';
+            selectedCompanyIds.clear();
+            updateSelectedCount();
+
+            renderTargetLists();
+        }
+
+        function deleteTargetList(listId) {
+            if (!confirm('このターゲットリストを削除しますか？')) return;
+            
+            targetLists = targetLists.filter(list => list.id !== listId);
+            localStorage.setItem('targetLists', JSON.stringify(targetLists));
+            
+            renderTargetLists();
+            showToast('ターゲットリストを削除しました');
+        }
+
+        // モーダルを開く際の処理
+        const originalToggleModal = toggleModal;
+        toggleModal = function(modalId) {
+            if (modalId === 'targetListSelectModal') {
+                renderCompanySelectList();
+            } else if (modalId === 'projectModal') {
+                // プロジェクト作成モーダルを開く際にデータを読み込み
+                populateProjectModal();
+            }
+            originalToggleModal(modalId);
+        };
+
+        // プロジェクト作成モーダルにデータを読み込み
+        function populateProjectModal() {
+            // ターゲットリストを読み込み
+            const targetListSelect = document.getElementById('project-target-list');
+            targetListSelect.innerHTML = '<option value="">選択してください...</option>';
+            
+            if (targetLists.length === 0) {
+                targetListSelect.innerHTML += '<option value="" disabled>ターゲットリストがありません</option>';
+            } else {
+                targetLists.forEach(list => {
+                    const option = document.createElement('option');
+                    option.value = list.id;
+                    option.textContent = `${list.name} (${list.companies.length}件)`;
+                    targetListSelect.appendChild(option);
+                });
+            }
+            
+            // 商材を読み込み
+            const productSelect = document.getElementById('project-product');
+            productSelect.innerHTML = '<option value="">選択してください...</option>';
+            const products = dataManager ? dataManager.getProducts() : [];
+            
+            if (products.length === 0) {
+                productSelect.innerHTML += '<option value="" disabled>商材が登録されていません</option>';
+            } else {
+                products.forEach(product => {
+                    const option = document.createElement('option');
+                    option.value = product.id;
+                    option.textContent = `${product.name}`;
+                    productSelect.appendChild(option);
+                });
+            }
+            
+            // ワーカーを読み込み
+            const workersList = document.getElementById('project-workers-list');
+            const workers = dataManager ? dataManager.getWorkers() : [];
+            
+            if (workers.length === 0) {
+                workersList.innerHTML = '<p class="text-slate-500 text-sm text-center py-4">ワーカーが登録されていません</p>';
+            } else {
+                workersList.innerHTML = workers.map(worker => `
+                    <label class="flex items-center gap-3 p-2 hover:bg-slate-700 rounded cursor-pointer">
+                        <input type="checkbox" class="w-4 h-4 rounded bg-slate-800 border-slate-500 text-indigo-600" data-worker-id="${worker.id}">
+                        <div class="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-xs text-white">${worker.avatar}</div>
+                        <span class="text-sm text-slate-200">${worker.name}</span>
+                    </label>
+                `).join('');
+            }
+        }
+
+        // 初期化時にターゲットリストを読み込み
+        document.addEventListener('DOMContentLoaded', function() {
+            const saved = localStorage.getItem('targetLists');
+            if (saved) {
+                targetLists = JSON.parse(saved);
+            }
+            renderTargetLists();
+        });
+    </script>
+</body>
+</html>

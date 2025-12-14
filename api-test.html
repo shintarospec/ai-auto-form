@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test Dashboard - AI AutoForm</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-slate-900 text-slate-200 min-h-screen p-8">
+    <div class="max-w-4xl mx-auto">
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-white mb-2">
+                <i class="fa-solid fa-flask text-indigo-500 mr-3"></i>
+                API Test Dashboard
+            </h1>
+            <p class="text-slate-400">バックエンドAPIの動作確認</p>
+        </div>
+
+        <!-- API Status -->
+        <div id="api-status" class="bg-slate-800 rounded-xl p-6 mb-6 border border-slate-700">
+            <h2 class="text-lg font-bold text-white mb-4">接続ステータス</h2>
+            <div id="status-indicator" class="flex items-center gap-3">
+                <div class="w-3 h-3 rounded-full bg-yellow-500 animate-pulse"></div>
+                <span class="text-slate-300">接続テスト中...</span>
+            </div>
+        </div>
+
+        <!-- API Endpoints Test -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <button onclick="testHealth()" class="bg-indigo-600 hover:bg-indigo-500 text-white p-4 rounded-lg font-bold transition">
+                <i class="fa-solid fa-heart-pulse mr-2"></i>
+                Health Check
+            </button>
+            <button onclick="testGetCompanies()" class="bg-green-600 hover:bg-green-500 text-white p-4 rounded-lg font-bold transition">
+                <i class="fa-solid fa-building mr-2"></i>
+                Get Companies
+            </button>
+            <button onclick="testCreateCompany()" class="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-lg font-bold transition">
+                <i class="fa-solid fa-plus mr-2"></i>
+                Create Company
+            </button>
+            <button onclick="testGetProjects()" class="bg-purple-600 hover:bg-purple-500 text-white p-4 rounded-lg font-bold transition">
+                <i class="fa-solid fa-folder mr-2"></i>
+                Get Projects
+            </button>
+        </div>
+
+        <!-- Response Display -->
+        <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+            <h2 class="text-lg font-bold text-white mb-4">レスポンス</h2>
+            <pre id="response-output" class="bg-slate-950 p-4 rounded-lg text-sm text-green-400 overflow-auto max-h-96 font-mono">テストを実行してください...</pre>
+        </div>
+
+        <!-- Quick Links -->
+        <div class="mt-8 flex gap-4">
+            <a href="/admin-console.html" class="text-indigo-400 hover:text-indigo-300 transition">
+                <i class="fa-solid fa-arrow-left mr-2"></i>
+                管理者画面に戻る
+            </a>
+        </div>
+    </div>
+
+    <script src="js/api-client.js"></script>
+    <script>
+        const output = document.getElementById('response-output');
+        const statusIndicator = document.getElementById('status-indicator');
+
+        // 自動接続テスト
+        window.addEventListener('DOMContentLoaded', async () => {
+            console.log('Starting API connection test...');
+            
+            // GitHub Codespaces対応: APIのURLを動的に生成
+            let apiBaseURL = 'http://localhost:5000';
+            const currentHost = window.location.host;
+            if (currentHost.includes('app.github.dev')) {
+                apiBaseURL = window.location.protocol + '//' + currentHost.replace('-8000.', '-5000.');
+            }
+            console.log('API Base URL:', apiBaseURL);
+            
+            try {
+                // 直接fetchでテスト
+                const response = await fetch(apiBaseURL + '/api/health');
+                console.log('Response status:', response.status);
+                const health = await response.json();
+                console.log('Health data:', health);
+                
+                statusIndicator.innerHTML = `
+                    <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                    <span class="text-green-300">✅ API接続成功</span>
+                    <span class="text-slate-500 ml-4">Version: ${health.version}</span>
+                    <span class="text-slate-500 ml-4">URL: ${apiBaseURL}</span>
+                `;
+                displayResponse(health);
+            } catch (error) {
+                console.error('Connection error:', error);
+                statusIndicator.innerHTML = `
+                    <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                    <span class="text-red-300">❌ API接続失敗</span>
+                    <span class="text-slate-500 ml-4">${error.message}</span>
+                    <span class="text-slate-500 ml-4">URL: ${apiBaseURL}</span>
+                `;
+                displayResponse({ 
+                    error: error.message,
+                    type: error.name,
+                    details: 'APIサーバーが起動していることを確認してください'
+                });
+            }
+        });
+
+        function displayResponse(data) {
+            output.textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function testHealth() {
+            try {
+                const result = await apiClient.healthCheck();
+                displayResponse(result);
+            } catch (error) {
+                displayResponse({ error: error.message });
+            }
+        }
+
+        async function testGetCompanies() {
+            try {
+                const result = await apiClient.getCompanies();
+                displayResponse(result);
+            } catch (error) {
+                displayResponse({ error: error.message });
+            }
+        }
+
+        async function testCreateCompany() {
+            try {
+                const result = await apiClient.createCompany({
+                    name: 'テスト株式会社',
+                    url: 'https://test.example.com',
+                    industry: 'IT・ソフトウェア'
+                });
+                displayResponse(result);
+            } catch (error) {
+                displayResponse({ error: error.message });
+            }
+        }
+
+        async function testGetProjects() {
+            try {
+                const result = await apiClient.getProjects();
+                displayResponse(result);
+            } catch (error) {
+                displayResponse({ error: error.message });
+            }
+        }
+    </script>
+</body>
+</html>

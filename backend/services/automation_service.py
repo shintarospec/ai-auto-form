@@ -1,0 +1,281 @@
+"""
+AI AutoForm - Playwright Automation Service
+フォーム自動入力のPoC実装
+"""
+
+from playwright.sync_api import sync_playwright, Page, Browser
+from typing import Dict, Optional
+import time
+
+class FormAutomationService:
+    """フォーム自動入力サービス"""
+    
+    def __init__(self, headless: bool = False):
+        """
+        初期化
+        
+        Args:
+            headless: ヘッドレスモードで実行するか
+        """
+        self.headless = headless
+        self.playwright = None
+        self.browser = None
+    
+    def start(self):
+        """ブラウザ起動"""
+        self.playwright = sync_playwright().start()
+        self.browser = self.playwright.chromium.launch(
+            headless=self.headless,
+            args=[
+                '--disable-blink-features=AutomationControlled',
+                '--disable-dev-shm-usage'
+            ]
+        )
+        print("✅ ブラウザを起動しました")
+    
+    def stop(self):
+        """ブラウザ終了"""
+        if self.browser:
+            self.browser.close()
+        if self.playwright:
+            self.playwright.stop()
+        print("✅ ブラウザを終了しました")
+    
+    def fill_contact_form(
+        self,
+        form_url: str,
+        message_data: Dict,
+        wait_for_captcha: bool = True
+    ) -> Dict:
+        """
+        問い合わせフォームに自動入力
+        
+        Args:
+            form_url: フォームURL
+            message_data: 入力データ
+                - sender_name: 送信者名
+                - sender_email: メールアドレス
+                - sender_company: 会社名
+                - sender_phone: 電話番号（オプション）
+                - message: メッセージ本文
+            wait_for_captcha: reCAPTCHA待機するか
+        
+        Returns:
+            結果
+        """
+        if not self.browser:
+            raise RuntimeError("ブラウザが起動していません。start()を呼んでください")
+        
+        page = self.browser.new_page()
+        
+        try:
+            # ページを開く
+            print(f"📄 フォームページを開いています: {form_url}")
+            page.goto(form_url, wait_until='networkidle', timeout=30000)
+            time.sleep(2)
+            
+            # フォームフィールドの検出と入力
+            fields_filled = []
+            
+            # 名前フィールド
+            name_selectors = [
+                'input[name*="name"]',
+                'input[id*="name"]',
+                'input[placeholder*="名前"]',
+                'input[placeholder*="お名前"]',
+            ]
+            if self._fill_field(page, name_selectors, message_data.get('sender_name', '')):
+                fields_filled.append('name')
+            
+            # メールフィールド
+            email_selectors = [
+                'input[type="email"]',
+                'input[name*="email"]',
+                'input[name*="mail"]',
+                'input[id*="email"]',
+            ]
+            if self._fill_field(page, email_selectors, message_data.get('sender_email', '')):
+                fields_filled.append('email')
+            
+            # 会社名フィールド
+            company_selectors = [
+                'input[name*="company"]',
+                'input[name*="kaisya"]',
+                'input[id*="company"]',
+                'input[placeholder*="会社"]',
+                'input[placeholder*="企業"]',
+            ]
+            if self._fill_field(page, company_selectors, message_data.get('sender_company', '')):
+                fields_filled.append('company')
+            
+            # 電話番号フィールド（オプション）
+            phone_selectors = [
+                'input[type="tel"]',
+                'input[name*="phone"]',
+                'input[name*="tel"]',
+                'input[id*="phone"]',
+            ]
+            if message_data.get('sender_phone'):
+                if self._fill_field(page, phone_selectors, message_data.get('sender_phone')):
+                    fields_filled.append('phone')
+            
+            # メッセージフィールド
+            message_selectors = [
+                'textarea',
+                'textarea[name*="message"]',
+                'textarea[name*="inquiry"]',
+                'textarea[id*="message"]',
+            ]
+            if self._fill_field(page, message_selectors, message_data.get('message', '')):
+                fields_filled.append('message')
+            
+            print(f"✅ フィールドに入力しました: {', '.join(fields_filled)}")
+            
+            # reCAPTCHAチェック
+            has_recaptcha = self._check_recaptcha(page)
+            
+            if has_recaptcha and wait_for_captcha:
+                print("⚠️  reCAPTCHAを検出しました")
+                print("   作業者が手動で解決してください...")
+                # ここでブラウザを作業者に渡す
+                # 実際の実装では、WebSocketで作業者画面に通知
+            
+            # スクリーンショットを撮影（デバッグ用）
+            screenshot_path = f'/tmp/form_screenshot_{int(time.time())}.png'
+            page.screenshot(path=screenshot_path)
+            print(f"📸 スクリーンショットを保存: {screenshot_path}")
+            
+            return {
+                'success': True,
+                'fields_filled': fields_filled,
+                'has_recaptcha': has_recaptcha,
+                'screenshot': screenshot_path,
+                'message': f'{len(fields_filled)}個のフィールドに入力完了'
+            }
+            
+        except Exception as e:
+            print(f"❌ エラー: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+        finally:
+            # ページを閉じる
+            if page:
+                page.close()
+                print("🔒 ページを閉じました")
+    
+    def _fill_field(self, page: Page, selectors: list, value: str) -> bool:
+        """
+        フィールドに値を入力（複数セレクタを試行）
+        
+        Args:
+            page: Playwrightページ
+            selectors: セレクタのリスト
+            value: 入力値
+        
+        Returns:
+            成功したかどうか
+        """
+        for selector in selectors:
+            try:
+                element = page.locator(selector).first
+                if element.count() > 0 and element.is_visible():
+                    element.fill(value)
+                    time.sleep(0.5)  # 自然な入力を模倣
+                    return True
+            except:
+                continue
+        return False
+    
+    def _check_recaptcha(self, page: Page) -> bool:
+        """
+        reCAPTCHAの存在をチェック
+        
+        Args:
+            page: Playwrightページ
+        
+        Returns:
+            reCAPTCHAが存在するか
+        """
+        recaptcha_selectors = [
+            'iframe[src*="recaptcha"]',
+            '.g-recaptcha',
+            '#g-recaptcha',
+            'div[class*="recaptcha"]'
+        ]
+        
+        for selector in recaptcha_selectors:
+            try:
+                if page.locator(selector).count() > 0:
+                    return True
+            except:
+                continue
+        
+        return False
+    
+    def take_screenshot(self, page: Page, filename: str = 'screenshot.png'):
+        """スクリーンショット撮影"""
+        page.screenshot(path=filename)
+        print(f"📸 スクリーンショットを保存しました: {filename}")
+
+
+# ========================================
+# テスト用スクリプト
+# ========================================
+if __name__ == '__main__':
+    print("""
+    ╔═══════════════════════════════════════════╗
+    ║   Playwright Form Automation PoC          ║
+    ║   AI AutoForm                             ║
+    ╚═══════════════════════════════════════════╝
+    """)
+    
+    # テストデータ
+    test_data = {
+        'sender_name': '山田太郎',
+        'sender_email': 'test@example.com',
+        'sender_company': 'テスト株式会社',
+        'sender_phone': '03-1234-5678',
+        'message': '''
+突然のご連絡失礼いたします。
+テスト株式会社の山田と申します。
+
+貴社のWebサイトを拝見し、事業内容に大変興味を持ちました。
+弊社のサービスが貴社のビジネスに貢献できる可能性があると考え、
+ご連絡させていただきました。
+
+詳細につきまして、一度お話しさせていただく機会をいただけますと幸いです。
+        '''.strip()
+    }
+    
+    # サービス初期化
+    service = FormAutomationService(headless=False)
+    
+    try:
+        service.start()
+        
+        # テスト用URL（実際のフォームURLに置き換えてください）
+        test_url = input("\nテストするフォームのURLを入力してください: ").strip()
+        
+        if test_url:
+            print("\n自動入力を開始します...")
+            result = service.fill_contact_form(test_url, test_data)
+            
+            if result['success']:
+                print(f"\n✅ {result['message']}")
+                if result['has_recaptcha']:
+                    print("\nreCAPTCHAを手動で解決してください...")
+                    input("Enter キーを押して続行...")
+                
+                # スクリーンショット
+                if 'page' in result:
+                    service.take_screenshot(result['page'])
+                    result['page'].close()
+            else:
+                print(f"\n❌ エラー: {result.get('error')}")
+        else:
+            print("URLが入力されませんでした")
+    
+    finally:
+        service.stop()

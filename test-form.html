@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>サンプル問い合わせフォーム - テスト用</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen py-12">
+    <div class="max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">お問い合わせフォーム</h1>
+        <p class="text-gray-600 mb-8">自動入力テスト用のサンプルフォームです</p>
+
+        <form id="contact-form" class="space-y-6">
+            <!-- 名前 -->
+            <div>
+                <label for="name" class="block text-sm font-bold text-gray-700 mb-2">
+                    お名前 <span class="text-red-500">*</span>
+                </label>
+                <input type="text" 
+                       id="name" 
+                       name="name" 
+                       required
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                       placeholder="山田太郎">
+            </div>
+
+            <!-- メールアドレス -->
+            <div>
+                <label for="email" class="block text-sm font-bold text-gray-700 mb-2">
+                    メールアドレス <span class="text-red-500">*</span>
+                </label>
+                <input type="email" 
+                       id="email" 
+                       name="email" 
+                       required
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                       placeholder="example@company.com">
+            </div>
+
+            <!-- 会社名 -->
+            <div>
+                <label for="company" class="block text-sm font-bold text-gray-700 mb-2">
+                    会社名
+                </label>
+                <input type="text" 
+                       id="company" 
+                       name="company"
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                       placeholder="株式会社サンプル">
+            </div>
+
+            <!-- 電話番号 -->
+            <div>
+                <label for="phone" class="block text-sm font-bold text-gray-700 mb-2">
+                    電話番号
+                </label>
+                <input type="tel" 
+                       id="phone" 
+                       name="phone"
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                       placeholder="03-1234-5678">
+            </div>
+
+            <!-- お問い合わせ内容 -->
+            <div>
+                <label for="message" class="block text-sm font-bold text-gray-700 mb-2">
+                    お問い合わせ内容 <span class="text-red-500">*</span>
+                </label>
+                <textarea id="message" 
+                          name="message" 
+                          rows="6" 
+                          required
+                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none"
+                          placeholder="お問い合わせ内容をご記入ください"></textarea>
+            </div>
+
+            <!-- reCAPTCHA シミュレーション -->
+            <div class="bg-gray-50 border-2 border-gray-300 rounded-lg p-4">
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="recaptcha-check" class="w-6 h-6">
+                    <label for="recaptcha-check" class="text-sm text-gray-700">
+                        私はロボットではありません（シミュレーション）
+                    </label>
+                </div>
+            </div>
+
+            <!-- 送信ボタン -->
+            <div>
+                <button type="submit" 
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-lg transition duration-200 shadow-lg">
+                    送信する
+                </button>
+            </div>
+        </form>
+
+        <!-- 送信完了メッセージ -->
+        <div id="success-message" class="hidden mt-6 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg">
+            <p class="font-bold">✅ 送信が完了しました！</p>
+            <p class="text-sm mt-1">お問い合わせありがとうございます。</p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('contact-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const recaptcha = document.getElementById('recaptcha-check');
+            if (!recaptcha.checked) {
+                alert('「私はロボットではありません」にチェックを入れてください');
+                return;
+            }
+
+            // フォームデータを取得
+            const formData = {
+                name: document.getElementById('name').value,
+                email: document.getElementById('email').value,
+                company: document.getElementById('company').value,
+                phone: document.getElementById('phone').value,
+                message: document.getElementById('message').value
+            };
+
+            console.log('送信データ:', formData);
+
+            // 成功メッセージを表示
+            document.getElementById('success-message').classList.remove('hidden');
+            document.getElementById('contact-form').reset();
+            
+            // 3秒後にメッセージを非表示
+            setTimeout(() => {
+                document.getElementById('success-message').classList.add('hidden');
+            }, 3000);
+        });
+
+        // Playwright検出用のログ
+        console.log('Test Form loaded - Ready for automation');
+    </script>
+</body>
+</html>

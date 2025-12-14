@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Form Automation Test - AI AutoForm</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-slate-900 text-slate-200 min-h-screen p-8">
+    <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-white mb-2">
+                <i class="fa-solid fa-robot text-green-500 mr-3"></i>
+                Playwright フォーム自動入力テスト
+            </h1>
+            <p class="text-slate-400">ブラウザ自動化のデモンストレーション</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Left: Control Panel -->
+            <div class="space-y-6">
+                <!-- Test Form URL -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h2 class="text-lg font-bold text-white mb-4">
+                        <i class="fa-solid fa-link mr-2"></i>
+                        テスト対象フォーム
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 uppercase mb-2">フォームURL</label>
+                            <input type="url" id="form-url" 
+                                   value="http://localhost:8000/test-form.html"
+                                   class="w-full bg-slate-700 border border-slate-600 rounded-lg p-3 text-white focus:ring-2 focus:ring-green-500 outline-none">
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="useTestForm()" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-bold transition">
+                                <i class="fa-solid fa-flask mr-1"></i>
+                                テストフォーム
+                            </button>
+                            <button onclick="useCustomURL()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg font-bold transition">
+                                <i class="fa-solid fa-globe mr-1"></i>
+                                カスタムURL
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Data -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h2 class="text-lg font-bold text-white mb-4">
+                        <i class="fa-solid fa-database mr-2"></i>
+                        入力データ
+                    </h2>
+                    
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">名前</label>
+                            <input type="text" id="data-name" value="山田太郎" 
+                                   class="w-full bg-slate-700 border border-slate-600 rounded p-2 text-sm text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">メールアドレス</label>
+                            <input type="email" id="data-email" value="test@example.com" 
+                                   class="w-full bg-slate-700 border border-slate-600 rounded p-2 text-sm text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">会社名</label>
+                            <input type="text" id="data-company" value="テスト株式会社" 
+                                   class="w-full bg-slate-700 border border-slate-600 rounded p-2 text-sm text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">電話番号</label>
+                            <input type="tel" id="data-phone" value="03-1234-5678" 
+                                   class="w-full bg-slate-700 border border-slate-600 rounded p-2 text-sm text-white">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">メッセージ</label>
+                            <textarea id="data-message" rows="4" 
+                                      class="w-full bg-slate-700 border border-slate-600 rounded p-2 text-sm text-white">突然のご連絡失礼いたします。
+テスト株式会社の山田と申します。
+
+貴社のサービスに大変興味を持ちました。
+詳細についてお話しさせていただければと思います。</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="bg-gradient-to-r from-green-900/30 to-blue-900/30 rounded-xl p-6 border border-green-700/50">
+                    <button onclick="startAutomation()" 
+                            class="w-full bg-green-600 hover:bg-green-500 text-white px-6 py-4 rounded-lg font-bold text-lg shadow-lg transition">
+                        <i class="fa-solid fa-play mr-2"></i>
+                        自動入力を開始
+                    </button>
+                    <p class="text-xs text-slate-400 mt-3 text-center">
+                        ⚠️ このボタンは現在APIエンドポイント経由で動作します（実装予定）
+                    </p>
+                </div>
+            </div>
+
+            <!-- Right: Status & Logs -->
+            <div class="space-y-6">
+                <!-- Status -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h2 class="text-lg font-bold text-white mb-4">
+                        <i class="fa-solid fa-chart-line mr-2"></i>
+                        実行ステータス
+                    </h2>
+                    
+                    <div id="status-display" class="space-y-3">
+                        <div class="flex items-center gap-3 p-3 bg-slate-900 rounded-lg">
+                            <div class="w-3 h-3 rounded-full bg-slate-500"></div>
+                            <span class="text-slate-400">待機中...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Logs -->
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h2 class="text-lg font-bold text-white mb-4">
+                        <i class="fa-solid fa-terminal mr-2"></i>
+                        実行ログ
+                    </h2>
+                    
+                    <div id="log-display" class="bg-slate-950 rounded-lg p-4 max-h-96 overflow-auto font-mono text-sm">
+                        <div class="text-slate-500">ログはここに表示されます...</div>
+                    </div>
+                </div>
+
+                <!-- Expected Behavior -->
+                <div class="bg-blue-900/20 rounded-xl p-6 border border-blue-700/50">
+                    <h3 class="text-sm font-bold text-blue-300 mb-3">
+                        <i class="fa-solid fa-info-circle mr-2"></i>
+                        期待される動作
+                    </h3>
+                    <ul class="text-xs text-slate-300 space-y-2">
+                        <li>✅ ブラウザが自動で起動</li>
+                        <li>✅ 指定URLのフォームを開く</li>
+                        <li>✅ 各フィールドに自動入力</li>
+                        <li>✅ reCAPTCHA検出時は一時停止</li>
+                        <li>✅ 作業者が手動で送信完了</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Links -->
+        <div class="mt-8 flex gap-4">
+            <a href="/admin-console.html" class="text-indigo-400 hover:text-indigo-300 transition">
+                <i class="fa-solid fa-arrow-left mr-2"></i>
+                管理者画面に戻る
+            </a>
+            <a href="/test-form.html" target="_blank" class="text-green-400 hover:text-green-300 transition">
+                <i class="fa-solid fa-external-link mr-2"></i>
+                テストフォームを開く
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const statusDisplay = document.getElementById('status-display');
+        const logDisplay = document.getElementById('log-display');
+
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const colors = {
+                info: 'text-blue-400',
+                success: 'text-green-400',
+                warning: 'text-yellow-400',
+                error: 'text-red-400'
+            };
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = colors[type];
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            
+            if (logDisplay.querySelector('.text-slate-500')) {
+                logDisplay.innerHTML = '';
+            }
+            
+            logDisplay.appendChild(logEntry);
+            logDisplay.scrollTop = logDisplay.scrollHeight;
+        }
+
+        function updateStatus(message, status = 'running') {
+            const colors = {
+                idle: 'bg-slate-500',
+                running: 'bg-yellow-500 animate-pulse',
+                success: 'bg-green-500',
+                error: 'bg-red-500'
+            };
+            
+            statusDisplay.innerHTML = `
+                <div class="flex items-center gap-3 p-3 bg-slate-900 rounded-lg">
+                    <div class="w-3 h-3 rounded-full ${colors[status]}"></div>
+                    <span class="text-white">${message}</span>
+                </div>
+            `;
+        }
+
+        function useTestForm() {
+            document.getElementById('form-url').value = 'http://localhost:8000/test-form.html';
+            addLog('テストフォームURLを設定しました', 'success');
+        }
+
+        function useCustomURL() {
+            const url = prompt('カスタムURLを入力してください:');
+            if (url) {
+                document.getElementById('form-url').value = url;
+                addLog(`カスタムURL設定: ${url}`, 'success');
+            }
+        }
+
+        async function startAutomation() {
+            const formData = {
+                url: document.getElementById('form-url').value,
+                data: {
+                    sender_name: document.getElementById('data-name').value,
+                    sender_email: document.getElementById('data-email').value,
+                    sender_company: document.getElementById('data-company').value,
+                    sender_phone: document.getElementById('data-phone').value,
+                    message: document.getElementById('data-message').value
+                }
+            };
+
+            addLog('自動入力を開始します...', 'info');
+            updateStatus('実行中...', 'running');
+
+            // シミュレーション（実際のAPI実装は後ほど）
+            setTimeout(() => {
+                addLog(`フォームURL: ${formData.url}`, 'info');
+                addLog('ブラウザを起動しています...', 'info');
+            }, 500);
+
+            setTimeout(() => {
+                addLog('ページを読み込み中...', 'info');
+            }, 1500);
+
+            setTimeout(() => {
+                addLog(`名前フィールドに入力: ${formData.data.sender_name}`, 'success');
+                addLog(`メールフィールドに入力: ${formData.data.sender_email}`, 'success');
+                addLog(`会社名フィールドに入力: ${formData.data.sender_company}`, 'success');
+                addLog(`電話番号フィールドに入力: ${formData.data.sender_phone}`, 'success');
+                addLog('メッセージフィールドに入力完了', 'success');
+            }, 2500);
+
+            setTimeout(() => {
+                addLog('reCAPTCHAを検出しました', 'warning');
+                addLog('作業者による手動対応を待機中...', 'warning');
+                updateStatus('reCAPTCHA待機中（Human-in-the-Loop）', 'idle');
+            }, 3500);
+
+            setTimeout(() => {
+                addLog('✅ 自動入力が完了しました', 'success');
+                addLog('💡 実際の実装では、Playwrightがブラウザを制御します', 'info');
+                updateStatus('完了', 'success');
+            }, 4500);
+        }
+
+        // 初期化
+        addLog('システム準備完了', 'success');
+        updateStatus('待機中', 'idle');
+    </script>
+</body>
+</html>
