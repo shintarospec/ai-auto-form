@@ -350,35 +350,38 @@
                     <div class="bg-slate-800 p-5 rounded-xl shadow-lg relative overflow-hidden group">
                         <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-blue-500"></div>
                         
-                        <!-- 目視確認の説明 -->
-                        <div class="bg-blue-900/30 p-4 rounded-lg mb-4 border border-blue-500/30">
-                            <div class="flex items-start gap-3">
-                                <div class="mt-1 text-blue-400"><i class="fa-solid fa-eye"></i></div>
-                                <div>
-                                    <p class="text-sm font-bold text-blue-300 mb-2">目視確認 & 送信</p>
-                                    <p class="text-xs text-blue-200 leading-relaxed">
-                                        1. 必須項目が埋まっているか確認<br>
-                                        2. <b>reCAPTCHA</b>があれば対応<br>
-                                        3. ブラウザで「送信」を押す
-                                    </p>
+                        <!-- 目視確認の説明（強調版） -->
+                        <div class="bg-gradient-to-br from-blue-600 to-blue-700 p-5 rounded-xl mb-4 shadow-lg">
+                            <div class="flex items-start gap-4">
+                                <div class="mt-1 text-blue-200 text-2xl"><i class="fa-solid fa-eye"></i></div>
+                                <div class="flex-1">
+                                    <p class="text-base font-bold text-white mb-3">✓ 作業の流れ</p>
+                                    <div class="space-y-2 text-sm text-blue-100">
+                                        <div class="flex items-start gap-2">
+                                            <span class="text-blue-300 font-bold">1.</span>
+                                            <span>必須項目が埋まっているか確認</span>
+                                        </div>
+                                        <div class="flex items-start gap-2">
+                                            <span class="text-blue-300 font-bold">2.</span>
+                                            <span><b class="text-white">reCAPTCHA</b>があれば対応</span>
+                                        </div>
+                                        <div class="flex items-start gap-2">
+                                            <span class="text-blue-300 font-bold">3.</span>
+                                            <span>ブラウザで「<b class="text-white">送信</b>」を押す</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         
                         <div class="flex flex-col gap-2">
                             <!-- AI自動送信ボタン -->
-                            <button onclick="autoSubmitForm()" id="auto-submit-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-lg transition shadow-lg shadow-indigo-900/30 flex items-center justify-center gap-2 transform active:scale-95">
-                                <i class="fa-solid fa-robot"></i>
+                            <button onclick="autoSubmitForm()" id="auto-submit-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 text-lg rounded-lg transition shadow-lg shadow-indigo-900/30 flex items-center justify-center gap-2 transform active:scale-95">
+                                <i class="fa-solid fa-robot text-xl"></i>
                                 <span>AI自動送信</span>
                             </button>
-
-                            <!-- 送信完了ボタン -->
-                            <button onclick="completeTask()" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-lg transition shadow-lg shadow-green-900/30 flex items-center justify-center gap-2 transform active:scale-95">
-                                <span>送信完了 ( +50 pt )</span>
-                                <i class="fa-solid fa-forward"></i>
-                            </button>
                             
-                            <div class="flex gap-2 mt-1">
+                            <div class="flex gap-2 mt-2">
                                 <button onclick="skipTask()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs py-2 rounded-lg font-bold">
                                     NG・不可
                                 </button>
