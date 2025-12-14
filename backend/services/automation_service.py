@@ -24,14 +24,24 @@ class FormAutomationService:
     def start(self):
         """ブラウザ起動"""
         self.playwright = sync_playwright().start()
-        self.browser = self.playwright.chromium.launch(
-            headless=self.headless,
-            args=[
-                '--disable-blink-features=AutomationControlled',
-                '--disable-dev-shm-usage'
-            ]
-        )
-        print("✅ ブラウザを起動しました")
+        # Mac互換性のためWebkit（Safari）を使用
+        try:
+            self.browser = self.playwright.webkit.launch(
+                headless=self.headless
+            )
+            print("✅ ブラウザ(Webkit)を起動しました")
+        except Exception as e:
+            print(f"⚠️ Webkit起動失敗: {e}")
+            # フォールバックでChromiumを試行
+            self.browser = self.playwright.chromium.launch(
+                headless=self.headless,
+                args=[
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-dev-shm-usage',
+                    '--no-sandbox'
+                ]
+            )
+            print("✅ ブラウザ(Chromium)を起動しました")
     
     def stop(self):
         """ブラウザ終了"""
