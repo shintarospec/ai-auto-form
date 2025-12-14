@@ -3,7 +3,19 @@
  * フロントエンドからバックエンドAPIを呼び出すためのクライアントモジュール
  */
 
-const API_BASE_URL = 'http://localhost:5001/api';
+// GitHub Codespaces対応: 現在のホストからAPIのURLを推測
+let API_BASE_URL;
+if (typeof window !== 'undefined') {
+    const currentHost = window.location.host;
+    if (currentHost.includes('app.github.dev')) {
+        // Codespacesの場合: ポート番号を8000から5001に変更
+        API_BASE_URL = window.location.protocol + '//' + currentHost.replace('-8000.', '-5001.') + '/api';
+    } else {
+        // ローカル開発の場合
+        API_BASE_URL = 'http://localhost:5001/api';
+    }
+    console.log('🔗 API Base URL:', API_BASE_URL);
+}
 
 /**
  * 共通のfetchラッパー

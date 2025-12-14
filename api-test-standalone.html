@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>API統合テスト - AI AutoForm</title>
+    <title>API統合テスト (Standalone) - AI AutoForm</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-200 min-h-screen p-8">
     <div class="max-w-6xl mx-auto">
-        <h1 class="text-3xl font-bold text-white mb-8">🔌 API統合テスト</h1>
+        <h1 class="text-3xl font-bold text-white mb-8">🔌 API統合テスト (Standalone)</h1>
         
         <!-- API Status -->
         <div id="api-status" class="bg-slate-800 border border-slate-700 rounded-lg p-4 mb-8">
@@ -103,29 +103,51 @@
         </div>
     </div>
 
-    <script src="frontend/js/api.js"></script>
     <script>
-        // デバッグ: スクリプト読み込み確認
-        console.log('=== Script Loading Debug ===');
-        console.log('API object exists:', typeof window.API !== 'undefined');
-        console.log('API object:', window.API);
-        
-        if (typeof window.API === 'undefined') {
-            document.getElementById('api-status').innerHTML = `
-                <div class="flex items-center gap-2">
-                    <div class="w-3 h-3 rounded-full bg-red-500"></div>
-                    <span class="font-bold text-red-400">API.js読み込み失敗</span>
-                    <span class="text-slate-400 text-sm ml-auto">frontend/js/api.jsを確認してください</span>
-                </div>
-            `;
+        // APIクライアント (インライン版)
+        // GitHub Codespaces対応: 現在のホストからAPIのURLを推測
+        let API_BASE_URL;
+        const currentHost = window.location.host;
+        if (currentHost.includes('app.github.dev')) {
+            // Codespacesの場合: ポート番号を8000から5001に変更
+            API_BASE_URL = window.location.protocol + '//' + currentHost.replace('-8000.', '-5001.') + '/api';
+        } else {
+            // ローカル開発の場合
+            API_BASE_URL = 'http://localhost:5001/api';
         }
-        
+        console.log('🔗 API Base URL:', API_BASE_URL);
+
+        async function apiRequest(endpoint, options = {}) {
+            const url = `${API_BASE_URL}${endpoint}`;
+            const config = {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                },
+                ...options
+            };
+
+            try {
+                const response = await fetch(url, config);
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+                
+                return await response.json();
+            } catch (error) {
+                console.error('API request failed:', error);
+                throw error;
+            }
+        }
+
         // ページ読み込み時にAPI接続確認
         window.addEventListener('DOMContentLoaded', async () => {
-            console.log('DOMContentLoaded - API check:', typeof window.API);
-            
             try {
-                const response = await fetch('http://localhost:5001/api/health');
+                const healthUrl = API_BASE_URL.replace('/api', '') + '/api/health';
+                console.log('🏥 Health Check URL:', healthUrl);
+                const response = await fetch(healthUrl);
                 const data = await response.json();
                 
                 document.getElementById('api-status').innerHTML = `
@@ -149,7 +171,7 @@
         // Workers API Tests
         async function testWorkers() {
             try {
-                const workers = await API.Workers.getAll();
+                const workers = await apiRequest('/workers');
                 document.getElementById('workers-result').textContent = JSON.stringify(workers, null, 2);
             } catch (error) {
                 document.getElementById('workers-result').textContent = `Error: ${error.message}`;
@@ -158,10 +180,13 @@
 
         async function createSampleWorker() {
             try {
-                const worker = await API.Workers.create({
-                    name: 'テスト太郎',
-                    email: `test${Date.now()}@example.com`,
-                    skill_level: 'intermediate'
+                const worker = await apiRequest('/workers', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: 'テスト太郎',
+                        email: `test${Date.now()}@example.com`,
+                        skill_level: 'intermediate'
+                    })
                 });
                 document.getElementById('workers-result').textContent = JSON.stringify(worker, null, 2);
                 alert('✅ ワーカー作成成功!');
@@ -174,7 +199,7 @@
         // Products API Tests
         async function testProducts() {
             try {
-                const products = await API.Products.getAll();
+                const products = await apiRequest('/products');
                 document.getElementById('products-result').textContent = JSON.stringify(products, null, 2);
             } catch (error) {
                 document.getElementById('products-result').textContent = `Error: ${error.message}`;
@@ -183,10 +208,13 @@
 
         async function createSampleProduct() {
             try {
-                const product = await API.Products.create({
-                    name: 'テスト商材',
-                    price: 100000,
-                    description: 'API統合テスト用の商材'
+                const product = await apiRequest('/products', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: 'テスト商材',
+                        price: 100000,
+                        description: 'API統合テスト用の商材'
+                    })
                 });
                 document.getElementById('products-result').textContent = JSON.stringify(product, null, 2);
                 alert('✅ 商品作成成功!');
@@ -199,7 +227,7 @@
         // Target Lists API Tests
         async function testTargetLists() {
             try {
-                const lists = await API.TargetLists.getAll();
+                const lists = await apiRequest('/targets/lists');
                 document.getElementById('targetlists-result').textContent = JSON.stringify(lists, null, 2);
             } catch (error) {
                 document.getElementById('targetlists-result').textContent = `Error: ${error.message}`;
@@ -208,8 +236,11 @@
 
         async function createSampleTargetList() {
             try {
-                const list = await API.TargetLists.create({
-                    name: `テストリスト ${new Date().toLocaleString('ja-JP')}`
+                const list = await apiRequest('/targets/lists', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: `テストリスト ${new Date().toLocaleString('ja-JP')}`
+                    })
                 });
                 document.getElementById('targetlists-result').textContent = JSON.stringify(list, null, 2);
                 alert('✅ ターゲットリスト作成成功!');
@@ -222,7 +253,7 @@
         // Projects API Tests
         async function testProjects() {
             try {
-                const projects = await API.Projects.getAll();
+                const projects = await apiRequest('/projects');
                 document.getElementById('projects-result').textContent = JSON.stringify(projects, null, 2);
             } catch (error) {
                 document.getElementById('projects-result').textContent = `Error: ${error.message}`;
@@ -231,7 +262,7 @@
 
         async function testProjectStats() {
             try {
-                const stats = await API.Projects.getStats(1);
+                const stats = await apiRequest('/projects/1/stats');
                 document.getElementById('projects-result').textContent = JSON.stringify(stats, null, 2);
             } catch (error) {
                 document.getElementById('projects-result').textContent = `Error: ${error.message}`;
@@ -241,7 +272,7 @@
         // Tasks API Tests
         async function testTasks() {
             try {
-                const tasks = await API.Tasks.getAll();
+                const tasks = await apiRequest('/tasks');
                 document.getElementById('tasks-result').textContent = JSON.stringify(tasks, null, 2);
             } catch (error) {
                 document.getElementById('tasks-result').textContent = `Error: ${error.message}`;
@@ -250,7 +281,7 @@
 
         async function testTasksByWorker() {
             try {
-                const tasks = await API.Tasks.getAll({ worker_id: 1 });
+                const tasks = await apiRequest('/tasks?worker_id=1');
                 document.getElementById('tasks-result').textContent = JSON.stringify(tasks, null, 2);
             } catch (error) {
                 document.getElementById('tasks-result').textContent = `Error: ${error.message}`;
@@ -261,11 +292,11 @@
         async function fetchAllData() {
             try {
                 const [workers, products, lists, projects, tasks] = await Promise.all([
-                    API.Workers.getAll(),
-                    API.Products.getAll(),
-                    API.TargetLists.getAll(),
-                    API.Projects.getAll(),
-                    API.Tasks.getAll()
+                    apiRequest('/workers'),
+                    apiRequest('/products'),
+                    apiRequest('/targets/lists'),
+                    apiRequest('/projects'),
+                    apiRequest('/tasks')
                 ]);
 
                 const summary = {
