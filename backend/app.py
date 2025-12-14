@@ -213,8 +213,8 @@ def submit_task_form(task_id):
         # Playwright自動化サービスをインポート
         from services.automation_service import FormAutomationService
         
-        # ヘッドレスモードで起動（Codespaces環境対応）
-        automation = FormAutomationService(headless=True)
+        # ヘッドレスモードで起動（headless=False にするとブラウザが表示される）
+        automation = FormAutomationService(headless=False)
         automation.start()
         
         # formDataを適切なキー名に変換
