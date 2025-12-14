@@ -150,7 +150,15 @@ class FormAutomationService:
                 # ここでブラウザを作業者に渡す
                 # 実際の実装では、WebSocketで作業者画面に通知
             
-            # スクリーンショットを撮影（デバッグ用）
+            # 作業者が内容を確認して送信ボタンを押すまで待機
+            print("👀 作業者による確認待ち...")
+            print("   フォーム内容を確認して、送信ボタンを押してください")
+            print(f"   {30}秒後に自動的にブラウザを閉じます")
+            
+            # 30秒間待機（作業者が送信ボタンを押す時間）
+            time.sleep(30)
+            
+            # スクリーンショットを撮影（送信後の状態）
             screenshot_path = f'/tmp/form_screenshot_{int(time.time())}.png'
             page.screenshot(path=screenshot_path)
             print(f"📸 スクリーンショットを保存: {screenshot_path}")
