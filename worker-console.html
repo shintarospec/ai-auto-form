@@ -343,31 +343,30 @@
                 <!-- 右：コントロールパネル (リモコン) -->
                 <div class="w-1/4 flex flex-col gap-4">
                     
-                    <!-- 確認作業の説明 -->
-                    <div class="bg-blue-50 p-4 rounded-xl shadow-sm border border-blue-100">
-                        <div class="flex items-start gap-3">
-                            <div class="mt-1 text-blue-500"><i class="fa-solid fa-eye"></i></div>
-                            <div>
-                                <p class="text-xs font-bold text-blue-800 mb-1">目視確認 & 送信</p>
-                                <p class="text-xs text-blue-600 leading-snug">
-                                    1. 必須項目が埋まっているか確認<br>
-                                    2. <b>reCAPTCHA</b>があれば対応<br>
-                                    3. ブラウザで「送信」を押す
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- スペーサー -->
                     <div class="flex-1"></div>
 
                     <!-- 最終アクション: フォーム送信 & 完了報告 -->
-                    <div class="bg-slate-800 p-5 rounded-xl shadow-lg text-center relative overflow-hidden group">
+                    <div class="bg-slate-800 p-5 rounded-xl shadow-lg relative overflow-hidden group">
                         <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-blue-500"></div>
-                        <p class="text-xs text-slate-400 mb-3">AI自動送信または手動送信後、完了報告</p>
+                        
+                        <!-- 目視確認の説明 -->
+                        <div class="bg-blue-900/30 p-4 rounded-lg mb-4 border border-blue-500/30">
+                            <div class="flex items-start gap-3">
+                                <div class="mt-1 text-blue-400"><i class="fa-solid fa-eye"></i></div>
+                                <div>
+                                    <p class="text-sm font-bold text-blue-300 mb-2">目視確認 & 送信</p>
+                                    <p class="text-xs text-blue-200 leading-relaxed">
+                                        1. 必須項目が埋まっているか確認<br>
+                                        2. <b>reCAPTCHA</b>があれば対応<br>
+                                        3. ブラウザで「送信」を押す
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                         
                         <div class="flex flex-col gap-2">
-                            <!-- AI自動送信ボタン (NEW) -->
+                            <!-- AI自動送信ボタン -->
                             <button onclick="autoSubmitForm()" id="auto-submit-btn" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-lg transition shadow-lg shadow-indigo-900/30 flex items-center justify-center gap-2 transform active:scale-95">
                                 <i class="fa-solid fa-robot"></i>
                                 <span>AI自動送信</span>
@@ -389,7 +388,7 @@
                             </div>
                         </div>
 
-                        <!-- 送信ステータス表示 (NEW) -->
+                        <!-- 送信ステータス表示 -->
                         <div id="submit-status" class="hidden mt-4 p-3 rounded-lg"></div>
                     </div>
 
