@@ -749,7 +749,7 @@
                 const product = dataManager.getProductById(project.productId);
                 
                 // GitHub Codespaces対応: APIのURLを動的に生成
-                let apiBaseURL = 'http://localhost:5000';
+                let apiBaseURL = 'http://localhost:5001';
                 const currentHost = window.location.host;
                 if (currentHost.includes('app.github.dev')) {
                     apiBaseURL = window.location.protocol + '//' + currentHost.replace('-8000.', '-5000.');
