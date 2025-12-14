@@ -155,41 +155,50 @@ class FormAutomationService:
             print("   フォーム内容を確認して、送信ボタンを押してください")
             print(f"   {60}秒後に自動的にブラウザを閉じます")
             
-            # 送信完了を検出（60秒間）
+            # 初期状態を記録
             initial_url = page.url
             submitted = False
             wait_time = 60
+            
+            # フォームの初期値を記録（送信後はリセットされる）
+            try:
+                initial_name = page.locator('input[name="name"]').input_value()
+            except:
+                initial_name = None
             
             # 1秒ごとにチェック（60回）
             for i in range(wait_time):
                 time.sleep(1)
                 
-                # URL変化をチェック（thank-you、confirm、successなどの文字列を検出）
+                # URL変化をチェック
                 current_url = page.url
                 if current_url != initial_url:
                     if any(keyword in current_url.lower() for keyword in ['thank', 'success', 'confirm', 'complete']):
                         submitted = True
                         print(f"✅ 送信完了を検出しました（URL変化）！ ({i+1}秒後)")
                         print(f"   遷移先URL: {current_url}")
-                        time.sleep(2)  # 確認のため2秒待機
+                        time.sleep(2)
                         break
                 
-                # フォームが非表示になったかチェック（送信後はフォームが消える）
+                # 成功メッセージが表示されたかチェック
                 try:
-                    form_element = page.locator('form')
                     success_element = page.locator('#success-message')
-                    
-                    # フォームが非表示 & 成功メッセージが表示されている
-                    if success_element.count() > 0:
-                        is_success_visible = success_element.is_visible()
-                        is_form_visible = form_element.count() > 0 and form_element.is_visible()
-                        
-                        # 成功メッセージが表示されていて、フォームが非表示なら送信完了
-                        if is_success_visible and not is_form_visible:
-                            submitted = True
-                            print(f"✅ 送信完了を検出しました（フォーム送信）！ ({i+1}秒後)")
-                            time.sleep(2)  # 確認のため2秒待機
-                            break
+                    if success_element.count() > 0 and success_element.is_visible():
+                        submitted = True
+                        print(f"✅ 送信完了を検出しました（成功メッセージ表示）！ ({i+1}秒後)")
+                        time.sleep(2)
+                        break
+                except:
+                    pass
+                
+                # フォームがリセットされたかチェック（入力値が消えた）
+                try:
+                    current_name = page.locator('input[name="name"]').input_value()
+                    if initial_name and current_name == '':
+                        submitted = True
+                        print(f"✅ 送信完了を検出しました（フォームリセット）！ ({i+1}秒後)")
+                        time.sleep(2)
+                        break
                 except:
                     pass
             
