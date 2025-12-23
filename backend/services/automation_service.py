@@ -31,24 +31,25 @@ class FormAutomationService:
             os.environ['DISPLAY'] = self.display
         
         self.playwright = sync_playwright().start()
-        # Mac互換性のためWebkit（Safari）を使用
+        # VPS環境ではChromiumを優先（VNC対応）
         try:
-            self.browser = self.playwright.webkit.launch(
-                headless=self.headless
-            )
-            print(f"✅ ブラウザ(Webkit)を起動しました (headless={self.headless}, DISPLAY={os.environ.get('DISPLAY', 'default')})")
-        except Exception as e:
-            print(f"⚠️ Webkit起動失敗: {e}")
-            # フォールバックでChromiumを試行
             self.browser = self.playwright.chromium.launch(
                 headless=self.headless,
                 args=[
                     '--disable-blink-features=AutomationControlled',
                     '--disable-dev-shm-usage',
-                    '--no-sandbox'
+                    '--no-sandbox',
+                    '--disable-gpu'  # VNC環境向け
                 ]
             )
             print(f"✅ ブラウザ(Chromium)を起動しました (headless={self.headless}, DISPLAY={os.environ.get('DISPLAY', 'default')})")
+        except Exception as e:
+            print(f"⚠️ Chromium起動失敗、Webkitで再試行: {e}")
+            # フォールバックでWebkitを試行
+            self.browser = self.playwright.webkit.launch(
+                headless=self.headless
+            )
+            print(f"✅ ブラウザ(Webkit)を起動しました (headless={self.headless}, DISPLAY={os.environ.get('DISPLAY', 'default')})")
     
     def stop(self):
         """ブラウザ終了"""
