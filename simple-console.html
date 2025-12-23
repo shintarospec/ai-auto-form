@@ -36,7 +36,7 @@
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 100%;
             margin: 0 auto;
             padding: 2rem;
         }
@@ -69,8 +69,23 @@
 
         .main-content {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
+            grid-template-columns: 25% 35% 40%;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 1400px) {
+            .main-content {
+                grid-template-columns: 1fr 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            .vnc-panel {
+                min-height: 600px;
+            }
         }
 
         .panel {
@@ -286,6 +301,24 @@
         .link:hover {
             text-decoration: underline;
         }
+
+        .vnc-container {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 4px;
+            background: #000;
+        }
+
+        .vnc-panel {
+            height: calc(100vh - 280px);
+            min-height: 500px;
+        }
+
+        .panel-body.vnc-body {
+            padding: 0;
+            height: calc(100% - 48px);
+        }
     </style>
 </head>
 <body>
@@ -342,6 +375,21 @@
                             タスクを選択してください
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- VNCビューアー -->
+            <div class="panel vnc-panel">
+                <div class="panel-header">
+                    🖥️ VNCビューアー（リアルタイム表示）
+                </div>
+                <div class="panel-body vnc-body">
+                    <iframe 
+                        src="http://153.126.154.158:6080/vnc.html?autoconnect=true&resize=scale"
+                        class="vnc-container"
+                        allow="clipboard-read; clipboard-write"
+                        title="VNC Viewer">
+                    </iframe>
                 </div>
             </div>
         </div>
@@ -531,13 +579,7 @@
                 const result = await response.json();
                 
                 if (response.ok) {
-                    alert(`✅ 自動入力完了！\n\nVNCビューアーでブラウザを確認してください：\n${result.vnc_url}\n\nreCAPTCHAを解決して送信してください。`);
-                    
-                    // VNCビューアーを新しいタブで開く
-                    if (confirm('VNCビューアーを開きますか？')) {
-                        window.open(result.vnc_url, '_blank');
-                    }
-                    
+                    alert(`✅ 自動入力完了！\n\nVNC表示（右側）でブラウザを確認してください。\n\nreCAPTCHAを解決して送信ボタンをクリックしてください。`);
                     await loadTasks();
                 } else {
                     alert(`❌ エラー: ${result.error || '実行に失敗しました'}`);
