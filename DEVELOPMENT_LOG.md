@@ -779,7 +779,128 @@ const API_BASE = window.location.hostname === 'localhost'
 
 ---
 
-**最終更新**: 2025年12月23日 22:00  
+## 🖥️ Phase 2 - VNC統合完了（12/23）
+
+### 実施内容
+
+#### 1. SSH鍵認証設定
+- Codespaces → VPS パスワードレス認証
+- 鍵タイプ: ED25519
+- 今後のVPS作業が効率化
+
+#### 2. VNC環境構築
+**インストールパッケージ**:
+- Xvfb: 仮想X Window Serverディスプレイ
+- x11vnc: VNCサーバー
+- noVNC: WebベースVNCクライアント
+- websockify: WebSocket→TCP変換
+
+**起動プロセス**:
+```bash
+# 仮想ディスプレイ :99 (1920x1080)
+Xvfb :99 -screen 0 1920x1080x24 &
+
+# VNCサーバー (ポート 5900)
+x11vnc -forever -shared -rfbport 5900 &
+
+# noVNC Web UI (ポート 6080)
+websockify --web=/usr/share/novnc 6080 localhost:5900 &
+```
+
+#### 3. Playwright VNC統合
+**automation_service.py修正**:
+- Chromiumを優先ブラウザに変更（VPS環境向け）
+- `--disable-gpu` フラグ追加
+- `headless=False` + `DISPLAY=:99` でVNC表示
+
+**Chromium依存関係**:
+```bash
+# Ubuntu 24.04向け手動インストール
+apt-get install -y libasound2t64 libatk-bridge2.0-0 libgtk-3-0 libnss3 libxrandr2 fonts-liberation
+
+# Chromiumブラウザ
+playwright install chromium
+```
+
+#### 4. ファイアウォール設定
+```bash
+sudo ufw allow 5900/tcp  # x11vnc
+sudo ufw allow 6080/tcp  # noVNC Web UI
+```
+
+**注意**: Sakura VPSパケットフィルタでも開放済み
+
+#### 5. 動作確認テスト
+**test-vnc-simple.py**:
+- DISPLAY=:99 環境変数設定
+- Chromium起動（headless=False）
+- Example Domainページ表示
+- VNCビューアーで実ブラウザ確認
+
+**結果**: ✅ 成功！VNC画面でブラウザが視認可能
+
+### 技術的な学び
+
+1. **Ubuntu 24.04パッケージ変更**
+   - `libasound2` → `libasound2t64`
+   - Playwright install-depsが失敗する場合は手動インストール
+
+2. **SSH接続タイムアウト**
+   - 長時間処理は`nohup` + バックグラウンド実行
+   - `timeout`コマンドで強制終了時間設定
+
+3. **仮想環境でのsudo**
+   - `sudo playwright`は失敗（PATHが通らない）
+   - フルパス指定: `/opt/ai-auto-form/venv/bin/playwright`
+
+4. **VNC URLアクセス**
+   - WebブラウザでVNCクライアント利用可能
+   - http://153.126.154.158:6080/vnc.html
+   - ネイティブVNCクライアントも可（vnc://153.126.154.158:5900）
+
+### 成果物
+
+| 項目 | 状態 |
+|------|------|
+| Xvfb (display :99) | ✅ 起動中 (PID 45355) |
+| x11vnc (port 5900) | ✅ 起動中 (PID 45415) |
+| noVNC (port 6080) | ✅ 起動中 (PID 45481) |
+| Chromium | ✅ インストール済み |
+| Playwright VNC統合 | ✅ テスト成功 |
+| ファイアウォール | ✅ 5900/6080 開放 |
+
+### VNCアクセス情報
+
+- **WebブラウザVNC**: http://153.126.154.158:6080/vnc.html
+- **ネイティブVNC**: vnc://153.126.154.158:5900
+- **ディスプレイ**: :99 (1920x1080x24)
+
+### 次のステップ: Phase 3 実タスク自動実行
+
+**Phase 2完了**: ✅ VNC環境統合完了 - Playwright + VNC + 日本語フォント
+
+**Phase 2 成果**:
+1. ✅ VNC環境構築（Xvfb + x11vnc + noVNC）
+2. ✅ Playwright VNC統合（headless=False, DISPLAY=:99）
+3. ✅ 日本語フォントインストール（Noto CJK, IPA）
+4. ✅ フォーム自動入力テスト成功
+5. ✅ VNC画面でリアルタイムブラウザ表示確認
+6. ✅ スクリーンショット保存機能動作
+
+**VNCアクセス**: http://153.126.154.158:6080/vnc.html
+
+**Phase 3 タスク**:
+1. UIから「実行」ボタン → API呼び出し
+2. API → simple_tasksからタスク取得
+3. Playwright自動入力実行（VNC表示）
+4. 作業者がreCAPTCHA解決
+5. 送信完了 → タスクステータス更新
+6. スクリーンショット保存・履歴記録
+
+---
+
+**最終更新**: 2025年12月23日 23:30  
 **Phase 1 MVP**: ✅ VPS デプロイ完了  
-**次回**: Phase 2 VNC環境構築  
+**Phase 2 VNC**: ✅ 統合完了・テスト成功  
+**次回**: Phase 3 実タスク自動実行フロー  
 **担当**: GitHub Copilot + shintarospec

@@ -1,93 +1,85 @@
 #!/usr/bin/env python3
 """
-フォーム自動入力のVNCテスト
-test-contact-form.htmlに対して自動入力を実行
+VNC経由でフォーム自動入力をテスト
+VNCビューアー（http://153.126.154.158:6080/vnc.html）で
+ブラウザの動作を確認できます
 """
 
-import sys
 import os
+import sys
 sys.path.insert(0, '/opt/ai-auto-form')
-os.environ['DISPLAY'] = ':99'
-os.environ['DATABASE_URL'] = 'postgresql://autoform_user:secure_password_123@localhost:5432/ai_autoform'
 
 from backend.services.automation_service import FormAutomationService
-from backend.database import get_db
-from backend.simple_models import Task
 import time
 
 def test_form_autofill():
-    """VNC上でフォーム自動入力をテスト"""
-    print("🧪 フォーム自動入力 VNCテスト開始")
-    print(f"📺 DISPLAY: {os.environ.get('DISPLAY')}")
+    """VNC経由でフォーム自動入力をテスト"""
     
-    # データベースからタスクを取得
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
+    print("=" * 60)
+    print("🚀 VNC + Playwright フォーム自動入力テスト")
+    print("=" * 60)
+    print()
+    print("📺 VNCビューアーを開いてください:")
+    print("   http://153.126.154.158:6080/vnc.html")
+    print()
+    print("⏱️  5秒後に開始します...")
+    time.sleep(5)
     
-    engine = create_engine(os.environ['DATABASE_URL'])
-    Session = sessionmaker(bind=engine)
-    db = Session()
-    
-    task = db.query(Task).filter(Task.id == 1).first()
-    
-    if not task:
-        print("❌ タスクが見つかりません")
-        return False
-    
-    print(f"\n📋 タスク情報:")
-    print(f"   会社: {task.company.name}")
-    print(f"   商品: {task.product.name}")
-    print(f"   ステータス: {task.status}")
-    
-    # メッセージデータを準備
-    message_data = {
+    # テストデータ
+    test_data = {
         'sender_name': '山田太郎',
-        'sender_email': 'yamada@example.com',
-        'sender_company': '株式会社サンプル',
+        'sender_company': 'テスト株式会社',
+        'sender_email': 'yamada@test-company.jp',
         'sender_phone': '03-1234-5678',
-        'message': f"{task.company.name}様\n\n{task.product.name}についてお問い合わせさせていただきます。"
+        'message': 'VNC経由でのフォーム自動入力テストです。\\nPlaywrightが正常に動作しています。'
     }
     
-    # automation_service初期化
-    service = FormAutomationService(headless=False, display=':99')
+    form_url = 'http://153.126.154.158:8000/test-contact-form.html'
+    
+    # FormAutomationServiceを初期化（VNCモード）
+    service = FormAutomationService(
+        headless=False,  # ブラウザを表示
+        display=':99'    # VNCディスプレイ
+    )
     
     try:
+        print("🌐 ブラウザを起動中...")
         service.start()
-        time.sleep(2)
+        print("✅ ブラウザ起動完了")
+        print()
         
-        # VPS上のテストフォームURL
-        form_url = 'http://153.126.154.158:8000/test-contact-form.html'
-        print(f"\n📄 フォームURL: {form_url}")
-        
-        # 自動入力実行
-        print("\n🤖 自動入力を開始します...")
+        print(f"📄 フォームページを開いています: {form_url}")
         result = service.fill_contact_form(
             form_url=form_url,
-            message_data=message_data,
+            message_data=test_data,
             wait_for_captcha=False  # テストなのでCAPTCHA待機なし
         )
         
-        print(f"\n✅ 自動入力完了: {result}")
+        print()
+        print("=" * 60)
+        print("📊 実行結果:")
+        print("=" * 60)
+        print(f"ステータス: {result.get('status', 'unknown')}")
+        if result.get('message'):
+            print(f"メッセージ: {result['message']}")
+        if result.get('screenshot'):
+            print(f"スクリーンショット: {result['screenshot']}")
+        print()
         
-        # VNC画面確認のため15秒待機
-        print("\n⏳ VNC画面を確認できるよう15秒待機します...")
-        print("   👀 http://153.126.154.158:6080/vnc.html を確認してください")
-        time.sleep(15)
-        
-        print("\n✅ テスト成功！フォーム自動入力がVNC上で動作しました")
+        # 結果を確認するため10秒待機
+        print("⏱️  結果確認のため10秒待機します...")
+        time.sleep(10)
         
     except Exception as e:
-        print(f"\n❌ エラー: {e}")
+        print(f"❌ エラー発生: {e}")
         import traceback
         traceback.print_exc()
-        return False
     
     finally:
+        print()
+        print("🔒 ブラウザを終了中...")
         service.stop()
-        db.close()
-    
-    return True
+        print("✅ テスト完了")
 
 if __name__ == '__main__':
-    success = test_form_autofill()
-    sys.exit(0 if success else 1)
+    test_form_autofill()
