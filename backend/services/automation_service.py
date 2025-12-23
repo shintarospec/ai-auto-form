@@ -92,8 +92,8 @@ class FormAutomationService:
             form_url = form_url.replace('http://localhost:8000', f'https://{codespace_name}-8000.app.github.dev')
             print(f"🔄 URL変換: Codespaces公開URLを使用します")
         
-        # ブラウザウィンドウを大きく表示（1600x900）
-        page = self.browser.new_page(viewport={'width': 1600, 'height': 900})
+        # ブラウザウィンドウをフルスクリーン表示（1920x1080）
+        page = self.browser.new_page(viewport={'width': 1920, 'height': 1080})
         
         try:
             # ページを開く

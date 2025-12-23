@@ -223,3 +223,31 @@ async def fill_field(page, selectors, value):
         except Exception:
             continue
     return False
+
+
+@simple_bp.route('/tasks/reset', methods=['POST'])
+def reset_tasks():
+    """全タスクを未処理状態にリセット"""
+    db = get_db_session()
+    try:
+        updated_count = db.query(Task).filter(
+            Task.status.in_(['in_progress', 'completed', 'failed'])
+        ).update({
+            'status': 'pending',
+            'screenshot_path': None,
+            'submitted': False,
+            'completed_at': None
+        }, synchronize_session=False)
+        
+        db.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'{updated_count}件のタスクを未処理にリセットしました',
+            'reset_count': updated_count
+        })
+    except Exception as e:
+        db.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
