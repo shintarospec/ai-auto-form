@@ -1,0 +1,17 @@
+[Unit]
+Description=AI AutoForm Flask API
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/ai-auto-form
+Environment="PYTHONPATH=/opt/ai-auto-form"
+Environment="FLASK_APP=backend.app"
+Environment="FLASK_ENV=production"
+ExecStart=/opt/ai-auto-form/venv/bin/flask run --host=0.0.0.0 --port=5001
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

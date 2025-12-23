@@ -19,17 +19,118 @@ AIによる高度なパーソナライズとHuman-in-the-Loopを組み合わせ�
 
 ## 📚 ドキュメント
 
-詳細な情報は以下のドキュメントを参照してください：
+### 🎯 まず最初に読むべきドキュメント
 
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - システムアーキテクチャ、技術スタック、データフロー
-- **[WORKFLOW.md](docs/WORKFLOW.md)** - 管理者・作業者の操作手順、トラブルシューティング
+- **[PROJECT_SPEC.md](PROJECT_SPEC.md)** ⭐ - 全体の企画・仕様書（プロジェクトの目的、システム構成、機能仕様）
+- **[DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md)** ⭐ - 開発作業ログ（これまでの経緯、問題と解決方法）
+- **[DEVELOPMENT_SCHEDULE_V2.md](DEVELOPMENT_SCHEDULE_V2.md)** ⭐ - 3フェーズ開発計画（今後の進め方）
+
+### 📖 Phase 1 MVP（現在完成）
+
+- **[PHASE1_MVP_GUIDE.md](PHASE1_MVP_GUIDE.md)** - Phase 1完成ガイド（使い方、トラブルシューティング）
+- **[HANDOFF_NEXT_CHAT.md](HANDOFF_NEXT_CHAT.md)** - 次回チャット用引き継ぎ（再起動手順、次のステップ）
+
+### 🚀 VPS環境構築（Phase 2準備）
+
+- **[VPS_SETUP_GUIDE.md](VPS_SETUP_GUIDE.md)** ⭐ - VPS初期セットアップガイド（詳細な手順）
+- **[VPS_DEPLOYMENT.md](VPS_DEPLOYMENT.md)** - VPSデプロイ手順（本番環境構築）
+- **[VPS_MIGRATION_CHECKLIST.md](VPS_MIGRATION_CHECKLIST.md)** - 移行チェックリスト
+
+### 🔬 技術仕様
+
+- **[HANDOFF.md](HANDOFF.md)** - VNC統合の技術仕様（Phase 2で使用）
 - **[API.md](docs/API.md)** - API仕様、エンドポイント一覧、データモデル
-- **[DEVELOPMENT_LOG.md](docs/DEVELOPMENT_LOG.md)** - 開発ログ、技術的課題と解決策
-- **[CHANGELOG.md](docs/CHANGELOG.md)** - バージョン履歴、変更内容、破壊的変更
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - システムアーキテクチャ、技術スタック
+- **[WORKFLOW.md](docs/WORKFLOW.md)** - 管理者・作業者の操作手順
+- **[CHANGELOG.md](docs/CHANGELOG.md)** - バージョン履歴、変更内容
 
 ---
 
-## 🚀 クイックスタート（Phase 1: プロトタイプ版）
+## 🚀 クイックスタート
+
+### 現在の状態：Phase 1 MVP完成 ✅
+
+Phase 1 MVPが完成しており、すぐに動作確認できます。
+
+#### **1. 環境の起動**
+
+```bash
+# PostgreSQLコンテナ起動（既に起動していれば不要）
+docker start ai-autoform-db
+
+# Terminal 1: Flask API起動
+cd /workspaces/ai-auto-form
+FLASK_APP=backend.app FLASK_ENV=development python -m flask run --host=0.0.0.0 --port=5001
+
+# Terminal 2: HTMLサーバー起動
+cd /workspaces/ai-auto-form
+python -m http.server 8000
+```
+
+#### **2. コンソールUIにアクセス**
+
+```
+http://localhost:8000/simple-console.html
+```
+
+または、Codespacesの場合は転送されたURLにアクセス。
+
+#### **3. 基本的な使い方**
+
+1. 左側のタスク一覧から任意のタスクをクリック
+2. 右側の詳細エリアで「🤖 自動入力実行」をクリック
+3. 自動入力が完了すると、スクリーンショットが表示されます
+4. 「🌐 フォームを開く」で実際のフォームを確認
+5. 「✅ 送信完了」をクリックしてタスクを完了
+
+詳細は [PHASE1_MVP_GUIDE.md](PHASE1_MVP_GUIDE.md) を参照してください。
+
+---
+
+## 📊 プロジェクトの状態
+
+### ✅ Phase 1: コア自動化機能（完成）
+- シンプルな3テーブルDB（companies, products, tasks）
+- 基本API（4エンドポイント）
+- シンプルコンソールUI
+- Playwright自動化（headlessモード）
+- 10件のテストデータ
+
+### 🔄 Phase 2: VNC統合・ワーカー管理（準備中）
+- VPS環境構築待ち
+- VNC統合（手動操作対応）
+- ワーカー管理機能
+- バッチ処理機能
+
+### ⏳ Phase 3: AI統合（未着手）
+- Gemini API統合
+- フォーム自動解析
+- 学習機能
+- レポート機能
+
+---
+
+## 🗺️ 次のステップ
+
+### VPS環境でPhase 2を実装する場合
+
+1. さくらVPS 1G/2Gプランを契約
+2. [VPS_SETUP_GUIDE.md](VPS_SETUP_GUIDE.md) に従ってセットアップ
+3. VNC統合のテスト
+4. Phase 2機能の実装
+
+### ローカルでPhase 1を試す場合
+
+1. 上記のクイックスタートに従って起動
+2. [PHASE1_MVP_GUIDE.md](PHASE1_MVP_GUIDE.md) を参照
+3. 動作確認・フィードバック
+
+---
+
+## 🔧 旧バージョン（Phase 1: プロトタイプ版）
+
+<details>
+<summary>クリックして展開</summary>
 
 ### **Phase 1: フロントエンドプロトタイプ**
 
@@ -50,9 +151,14 @@ python -m http.server 8000
 - プロジェクト: 4件
 - タスク: 250件
 
+</details>
+
 ---
 
 ### **Phase 2: バックエンド統合（実装済み✅）**
+
+<details>
+<summary>クリックして展開</summary>
 
 #### **セットアップ手順**
 

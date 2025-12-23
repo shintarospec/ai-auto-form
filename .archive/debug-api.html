@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Debug</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .success { color: green; }
+        .error { color: red; }
+        pre { background: #f4f4f4; padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>AI AutoForm API Debug</h1>
+    <div id="results"></div>
+
+    <script>
+        const results = document.getElementById('results');
+        
+        async function test() {
+            // API Base URL検出
+            const currentHost = window.location.host;
+            let apiBaseUrl;
+            if (currentHost.includes('app.github.dev')) {
+                apiBaseUrl = window.location.protocol + '//' + currentHost.replace('-8000.', '-5001.') + '/api';
+            } else {
+                apiBaseUrl = 'http://localhost:5001/api';
+            }
+            
+            results.innerHTML += `<h2>1. API Base URL</h2><pre>${apiBaseUrl}</pre>`;
+            
+            // Health Check
+            try {
+                const healthResponse = await fetch(`${apiBaseUrl.replace('/api', '')}/api/health`);
+                const healthData = await healthResponse.json();
+                results.innerHTML += `<h2 class="success">2. Health Check ✓</h2><pre>${JSON.stringify(healthData, null, 2)}</pre>`;
+            } catch (error) {
+                results.innerHTML += `<h2 class="error">2. Health Check ✗</h2><pre>${error.message}</pre>`;
+            }
+            
+            // Workers
+            try {
+                const workersResponse = await fetch(`${apiBaseUrl}/workers`);
+                const workersData = await workersResponse.json();
+                results.innerHTML += `<h2 class="success">3. Workers API ✓</h2><pre>${JSON.stringify(workersData.slice(0, 2), null, 2)}</pre>`;
+                results.innerHTML += `<p>Total workers: ${workersData.length}</p>`;
+            } catch (error) {
+                results.innerHTML += `<h2 class="error">3. Workers API ✗</h2><pre>${error.message}</pre>`;
+            }
+        }
+        
+        test();
+    </script>
+</body>
+</html>

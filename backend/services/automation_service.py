@@ -10,26 +10,33 @@ import time
 class FormAutomationService:
     """フォーム自動入力サービス"""
     
-    def __init__(self, headless: bool = False):
+    def __init__(self, headless: bool = False, display: Optional[str] = None):
         """
         初期化
         
         Args:
-            headless: ヘッドレスモードで実行するか
+            headless: ヘッドレスモードで実行するか（False=GUI表示）
+            display: DISPLAY環境変数（VNC使用時は ":1"）
         """
         self.headless = headless
+        self.display = display
         self.playwright = None
         self.browser = None
     
     def start(self):
         """ブラウザ起動"""
+        # VNCディスプレイを設定
+        import os
+        if self.display:
+            os.environ['DISPLAY'] = self.display
+        
         self.playwright = sync_playwright().start()
         # Mac互換性のためWebkit（Safari）を使用
         try:
             self.browser = self.playwright.webkit.launch(
                 headless=self.headless
             )
-            print("✅ ブラウザ(Webkit)を起動しました")
+            print(f"✅ ブラウザ(Webkit)を起動しました (headless={self.headless}, DISPLAY={os.environ.get('DISPLAY', 'default')})")
         except Exception as e:
             print(f"⚠️ Webkit起動失敗: {e}")
             # フォールバックでChromiumを試行
@@ -41,7 +48,7 @@ class FormAutomationService:
                     '--no-sandbox'
                 ]
             )
-            print("✅ ブラウザ(Chromium)を起動しました")
+            print(f"✅ ブラウザ(Chromium)を起動しました (headless={self.headless}, DISPLAY={os.environ.get('DISPLAY', 'default')})")
     
     def stop(self):
         """ブラウザ終了"""
@@ -75,6 +82,14 @@ class FormAutomationService:
         """
         if not self.browser:
             raise RuntimeError("ブラウザが起動していません。start()を呼んでください")
+        
+        # Codespaces環境でlocalhost URLを変換
+        import os
+        codespace_name = os.environ.get('CODESPACE_NAME')
+        if codespace_name and 'localhost:8000' in form_url:
+            # localhost:8000 を Codespaces公開URLに変換
+            form_url = form_url.replace('http://localhost:8000', f'https://{codespace_name}-8000.app.github.dev')
+            print(f"🔄 URL変換: Codespaces公開URLを使用します")
         
         page = self.browser.new_page()
         

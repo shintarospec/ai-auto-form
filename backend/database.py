@@ -27,11 +27,12 @@ DATABASE_URL = os.getenv(
 # Create SQLAlchemy engine
 engine = create_engine(
     DATABASE_URL,
-    echo=os.getenv('FLASK_ENV') == 'development',  # Log SQL queries in development
-    pool_pre_ping=True,  # Enable connection health checks
-    pool_size=10,  # Maximum number of connections
-    max_overflow=20,  # Maximum overflow connections
-    pool_recycle=3600,  # Recycle connections after 1 hour
+    echo=False,  # Disable SQL logging to improve performance
+    pool_pre_ping=False,  # Disable connection health checks (can cause hangs)
+    pool_size=5,  # Smaller pool size
+    max_overflow=10,  # Smaller overflow
+    pool_recycle=300,  # Recycle connections after 5 minutes
+    connect_args={'connect_timeout': 10}  # 10 second connection timeout
 )
 
 # Session factory
@@ -92,11 +93,10 @@ def init_db():
     """
     Initialize the database by creating all tables.
     Should be called when the application starts.
+    
+    Phase 1 MVP: Uses simple_models.py
     """
-    from backend.models import (
-        Worker, Product, TargetList, TargetCompany,
-        Project, Task, project_workers
-    )
+    from backend.simple_models import Company, Product, Task
     Base.metadata.create_all(bind=engine)
     print("✅ Database tables created successfully")
 

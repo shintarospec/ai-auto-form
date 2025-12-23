@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Auto Form - Phase 1 MVP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .header p {
+            font-size: 0.875rem;
+            opacity: 0.8;
+            margin-top: 0.25rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .stat-card h3 {
+            font-size: 0.875rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .panel-header {
+            background: #34495e;
+            color: white;
+            padding: 1rem 1.5rem;
+            font-weight: 600;
+        }
+
+        .panel-body {
+            padding: 1.5rem;
+        }
+
+        .task-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .task-item {
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .task-item:hover {
+            border-color: #3498db;
+            box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+        }
+
+        .task-item.selected {
+            border-color: #3498db;
+            background: #f0f8ff;
+        }
+
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .task-title {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .status-pending { background: #fff3cd; color: #856404; }
+        .status-in_progress { background: #cfe2ff; color: #084298; }
+        .status-completed { background: #d1e7dd; color: #0f5132; }
+        .status-failed { background: #f8d7da; color: #842029; }
+
+        .task-details {
+            font-size: 0.875rem;
+            color: #666;
+            margin-top: 0.5rem;
+        }
+
+        .detail-viewer {
+            position: relative;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #999;
+        }
+
+        .form-data {
+            background: #f8f9fa;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .form-field {
+            margin-bottom: 0.75rem;
+        }
+
+        .form-field label {
+            display: block;
+            font-size: 0.75rem;
+            color: #666;
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+        }
+
+        .form-field .value {
+            background: white;
+            padding: 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+            font-size: 0.875rem;
+        }
+
+        .screenshot-area {
+            background: #f8f9fa;
+            border-radius: 4px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .screenshot-area img {
+            max-width: 100%;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.875rem;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #229954;
+        }
+
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .info-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .info-section h4 {
+            font-size: 0.875rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .info-section .content {
+            background: #f8f9fa;
+            padding: 0.75rem;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+
+        .link {
+            color: #3498db;
+            text-decoration: none;
+        }
+
+        .link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 Simple Auto Form - Phase 1 MVP</h1>
+        <p>ブラウザ自動入力 → スクリーンショット確認 → 手動送信</p>
+    </div>
+
+    <div class="container">
+        <!-- 統計情報 -->
+        <div class="stats">
+            <div class="stat-card">
+                <h3>総タスク数</h3>
+                <div class="value" id="stat-total">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>未処理</h3>
+                <div class="value" id="stat-pending">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>完了</h3>
+                <div class="value" id="stat-completed">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>失敗</h3>
+                <div class="value" id="stat-failed">0</div>
+            </div>
+        </div>
+
+        <!-- メインコンテンツ -->
+        <div class="main-content">
+            <!-- タスクリスト -->
+            <div class="panel">
+                <div class="panel-header">
+                    📋 タスク一覧
+                </div>
+                <div class="panel-body">
+                    <div class="task-list" id="task-list">
+                        <div class="empty-state">
+                            読み込み中...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- タスク詳細 -->
+            <div class="panel">
+                <div class="panel-header">
+                    🔍 タスク詳細
+                </div>
+                <div class="panel-body">
+                    <div class="detail-viewer" id="task-detail">
+                        <div class="empty-state">
+                            タスクを選択してください
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 現在のホストに基づいてAPI URLを自動検出
+        const API_BASE = window.location.hostname === 'localhost' 
+            ? 'http://localhost:5001'
+            : window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/)
+                ? `http://${window.location.hostname}:5001`
+                : window.location.origin.replace('-8000.', '-5001.');
+        let tasks = [];
+        let selectedTask = null;
+
+        // 初期化
+        async function init() {
+            await loadTasks();
+            setInterval(loadTasks, 5000); // 5秒ごとに更新
+        }
+
+        // タスク一覧を取得
+        async function loadTasks() {
+            try {
+                const response = await fetch(`${API_BASE}/api/simple/tasks`);
+                tasks = await response.json();
+                updateStats();
+                renderTaskList();
+                
+                // 選択中のタスクを再レンダリング
+                if (selectedTask) {
+                    const updated = tasks.find(t => t.id === selectedTask.id);
+                    if (updated) {
+                        selectedTask = updated;
+                        renderTaskDetail(selectedTask);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load tasks:', error);
+            }
+        }
+
+        // 統計情報を更新
+        function updateStats() {
+            document.getElementById('stat-total').textContent = tasks.length;
+            document.getElementById('stat-pending').textContent = tasks.filter(t => t.status === 'pending').length;
+            document.getElementById('stat-completed').textContent = tasks.filter(t => t.status === 'completed').length;
+            document.getElementById('stat-failed').textContent = tasks.filter(t => t.status === 'failed').length;
+        }
+
+        // タスクリストを描画
+        function renderTaskList() {
+            const container = document.getElementById('task-list');
+            
+            if (tasks.length === 0) {
+                container.innerHTML = '<div class="empty-state">タスクがありません</div>';
+                return;
+            }
+
+            container.innerHTML = tasks.map(task => `
+                <div class="task-item ${selectedTask && selectedTask.id === task.id ? 'selected' : ''}" 
+                     onclick="selectTask(${task.id})">
+                    <div class="task-header">
+                        <div class="task-title">${task.company.name}</div>
+                        <span class="status-badge status-${task.status}">${getStatusText(task.status)}</span>
+                    </div>
+                    <div class="task-details">
+                        <strong>${task.product.name}</strong><br>
+                        <small>ID: ${task.id} | 作成: ${formatDate(task.created_at)}</small>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // タスクを選択
+        function selectTask(taskId) {
+            selectedTask = tasks.find(t => t.id === taskId);
+            renderTaskList();
+            renderTaskDetail(selectedTask);
+        }
+
+        // タスク詳細を描画
+        function renderTaskDetail(task) {
+            const container = document.getElementById('task-detail');
+            
+            if (!task) {
+                container.innerHTML = '<div class="empty-state">タスクを選択してください</div>';
+                return;
+            }
+
+            const canExecute = task.status === 'pending' || task.status === 'failed';
+            const canComplete = task.status === 'in_progress' && task.screenshot_path;
+
+            container.innerHTML = `
+                <!-- 企業情報 -->
+                <div class="info-section">
+                    <h4>🏢 対象企業</h4>
+                    <div class="content">
+                        <strong>${task.company.name}</strong><br>
+                        業種: ${task.company.industry || 'N/A'}<br>
+                        <a href="${task.company.form_url}" target="_blank" class="link">フォームURL</a>
+                    </div>
+                </div>
+
+                <!-- 商材情報 -->
+                <div class="info-section">
+                    <h4>📦 商材</h4>
+                    <div class="content">
+                        <strong>${task.product.name}</strong><br>
+                        ${task.product.description}
+                    </div>
+                </div>
+
+                <!-- フォームデータ -->
+                <div class="info-section">
+                    <h4>📝 入力データ</h4>
+                    <div class="form-data">
+                        ${Object.entries(task.form_data).map(([key, value]) => `
+                            <div class="form-field">
+                                <label>${key}</label>
+                                <div class="value">${value}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- スクリーンショット -->
+                ${task.screenshot_path ? `
+                    <div class="info-section">
+                        <h4>📸 スクリーンショット</h4>
+                        <div class="screenshot-area">
+                            <img src="${API_BASE}${task.screenshot_path}" alt="Screenshot">
+                        </div>
+                    </div>
+                ` : ''}
+
+                <!-- アクションボタン -->
+                <div class="action-buttons">
+                    <button class="btn btn-primary" 
+                            onclick="executeTask(${task.id})"
+                            ${!canExecute ? 'disabled' : ''}>
+                        ${task.status === 'in_progress' ? '<span class="loading"></span>' : ''}
+                        🤖 自動入力実行
+                    </button>
+                    <button class="btn btn-success" 
+                            onclick="completeTask(${task.id})"
+                            ${!canComplete ? 'disabled' : ''}>
+                        ✅ 送信完了
+                    </button>
+                    <button class="btn btn-secondary" 
+                            onclick="window.open('${task.company.form_url}', '_blank')">
+                        🌐 フォームを開く
+                    </button>
+                </div>
+
+                <!-- ステータス情報 -->
+                <div class="info-section" style="margin-top: 1.5rem;">
+                    <h4>ℹ️ ステータス</h4>
+                    <div class="content">
+                        状態: <strong>${getStatusText(task.status)}</strong><br>
+                        送信済み: ${task.submitted ? 'はい' : 'いいえ'}<br>
+                        作成日時: ${formatDate(task.created_at)}<br>
+                        ${task.completed_at ? `完了日時: ${formatDate(task.completed_at)}` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // タスク実行
+        async function executeTask(taskId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/simple/tasks/${taskId}/execute`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    alert('自動入力を開始しました。完了までお待ちください...');
+                    await loadTasks();
+                } else {
+                    const error = await response.json();
+                    alert(`エラー: ${error.message || '実行に失敗しました'}`);
+                }
+            } catch (error) {
+                console.error('Execute failed:', error);
+                alert('実行に失敗しました');
+            }
+        }
+
+        // タスク完了
+        async function completeTask(taskId) {
+            if (!confirm('このタスクを完了済みにしますか？')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/simple/tasks/${taskId}/complete`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    alert('タスクを完了済みにしました');
+                    await loadTasks();
+                } else {
+                    const error = await response.json();
+                    alert(`エラー: ${error.message || '完了処理に失敗しました'}`);
+                }
+            } catch (error) {
+                console.error('Complete failed:', error);
+                alert('完了処理に失敗しました');
+            }
+        }
+
+        // ユーティリティ関数
+        function getStatusText(status) {
+            const statusMap = {
+                'pending': '未処理',
+                'in_progress': '処理中',
+                'completed': '完了',
+                'failed': '失敗'
+            };
+            return statusMap[status] || status;
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleString('ja-JP');
+        }
+
+        // 起動
+        init();
+    </script>
+</body>
+</html>

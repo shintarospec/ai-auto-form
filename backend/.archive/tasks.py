@@ -154,12 +154,27 @@ def submit_task(task_id):
         task.status = 'in_progress'
         db.commit()
         
-        # Execute automation
-        automation = FormAutomationService(headless=False)
-        result = automation.fill_and_submit_form(
-            url=data['companyUrl'],
-            form_data=data['formData']
+        # Execute automation - Use VNC mode (DISPLAY=:99)
+        # Browser will be visible in noVNC (port 6080)
+        automation = FormAutomationService(headless=False, display=':99')
+        automation.start()
+        
+        # Convert form data to expected format
+        message_data = {
+            'sender_name': data['formData'].get('name', ''),
+            'sender_email': data['formData'].get('email', ''),
+            'sender_company': data['formData'].get('company', ''),
+            'sender_phone': data['formData'].get('phone', ''),
+            'message': data['formData'].get('message', '')
+        }
+        
+        result = automation.fill_contact_form(
+            form_url=data['companyUrl'],
+            message_data=message_data,
+            wait_for_captcha=True
         )
+        
+        automation.stop()
         
         # Update task based on result
         if result.get('success'):

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VNC Connection Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1e1e1e; color: #fff; }
+        .success { color: #4ec9b0; }
+        .error { color: #f48771; }
+        pre { background: #2d2d2d; padding: 15px; border-radius: 5px; overflow: auto; }
+        button { padding: 10px 20px; margin: 10px 5px; background: #0e639c; color: white; border: none; cursor: pointer; }
+        button:hover { background: #1177bb; }
+    </style>
+</head>
+<body>
+    <h1>🔌 VNC Connection Diagnostics</h1>
+    <div id="results"></div>
+    
+    <h2>Actions</h2>
+    <button onclick="testHTTP()">1. Test HTTP Connection</button>
+    <button onclick="testWebSocket()">2. Test WebSocket</button>
+    <button onclick="openNoVNC()">3. Open noVNC</button>
+
+    <script>
+        const results = document.getElementById('results');
+        
+        function log(msg, type = 'info') {
+            const color = type === 'success' ? 'success' : type === 'error' ? 'error' : '';
+            results.innerHTML += `<div class="${color}">${new Date().toLocaleTimeString()} - ${msg}</div>`;
+        }
+        
+        // Detect VNC URL
+        const hostname = window.location.hostname;
+        let vncUrl;
+        if (hostname.includes('app.github.dev')) {
+            const baseHost = hostname.split('-').slice(0, -1).join('-');
+            vncUrl = `https://${baseHost}-6080.app.github.dev`;
+        } else {
+            vncUrl = 'http://localhost:6080';
+        }
+        
+        log(`🌐 Detected VNC URL: ${vncUrl}`);
+        
+        async function testHTTP() {
+            log('Testing HTTP connection to noVNC...');
+            try {
+                const response = await fetch(`${vncUrl}/vnc.html`);
+                if (response.ok) {
+                    log('✅ HTTP connection successful!', 'success');
+                    log(`Status: ${response.status} ${response.statusText}`, 'success');
+                } else {
+                    log(`❌ HTTP failed: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ HTTP error: ${error.message}`, 'error');
+            }
+        }
+        
+        function testWebSocket() {
+            log('Testing WebSocket connection...');
+            const wsUrl = vncUrl.replace('https://', 'wss://').replace('http://', 'ws://') + '/';
+            log(`WebSocket URL: ${wsUrl}`);
+            
+            const ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                log('✅ WebSocket connection opened!', 'success');
+                ws.close();
+            };
+            
+            ws.onerror = (error) => {
+                log(`❌ WebSocket error: ${error}`, 'error');
+            };
+            
+            ws.onclose = (event) => {
+                log(`WebSocket closed: code=${event.code}, reason=${event.reason}`);
+            };
+            
+            setTimeout(() => {
+                if (ws.readyState !== WebSocket.OPEN) {
+                    log('⏱️ WebSocket connection timeout', 'error');
+                    ws.close();
+                }
+            }, 5000);
+        }
+        
+        function openNoVNC() {
+            const url = `${vncUrl}/vnc.html?autoconnect=true&resize=scale`;
+            log(`Opening: ${url}`);
+            window.open(url, '_blank');
+        }
+        
+        // Auto-test on load
+        setTimeout(() => {
+            testHTTP();
+        }, 1000);
+    </script>
+</body>
+</html>
