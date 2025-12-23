@@ -421,12 +421,13 @@
                 </div>
                 <div class="panel-body vnc-body">
                     <div style="background: #e3f2fd; padding: 0.75rem; font-size: 0.75rem; border-bottom: 1px solid #90caf9;">
-                        <strong>💡 VNC入力方法（超シンプル）:</strong><br>
-                        <strong style="color: #1976d2;">① 推奨：左のテキストを見ながら直接入力</strong> （最も確実）<br>
-                        ② 試験的：左でCtrl+C → VNC左サイドバー📋Clipboard → Ctrl+V貼付 → フォームでCtrl+V<br>
-                        ※ 自動入力済みなので、確認して間違いがあれば修正するだけでOK！
+                        <strong>💡 VNC修正方法（超シンプル）:</strong><br>
+                        <strong style="color: #1976d2;">① 最速：フィールド横の「VNCに送信」→ VNC内でCtrl+V</strong><br>
+                        ② 確実：左のテキストを見ながら直接タイピング<br>
+                        ※ 🤖自動入力済み → 👁️確認 → ✏️修正（必要時のみ） → ✅送信
                     </div>
                     <iframe 
+                        id="vnc-frame"
                         src="http://153.126.154.158:6080/vnc.html?autoconnect=true&resize=scale&clipboard=true"
                         class="vnc-container"
                         allow="clipboard-read; clipboard-write"
@@ -554,7 +555,7 @@
                     <div class="form-data">
                         ${Object.entries(task.form_data).map(([key, value]) => `
                             <div class="form-field">
-                                <label>${key}</label>
+                                <label>${key} <button class="copy-btn" onclick="sendToVNC('${value.replace(/'/g, "\\'")}', event)">VNCに送信</button></label>
                                 <textarea class="value" readonly onclick="this.select()" style="cursor: text; resize: vertical; min-height: 40px; font-family: inherit;">${value}</textarea>
                             </div>
                         `).join('')}
@@ -693,6 +694,61 @@
             if (!dateString) return 'N/A';
             const date = new Date(dateString);
             return date.toLocaleString('ja-JP');
+        }
+
+        // クリップボードに直接コピー（VNCで即ペースト可能）
+        async function sendToVNC(text, event) {
+            event.stopPropagation(); // 親要素のクリックイベントを防ぐ
+            
+            const btn = event.target;
+            const originalText = btn.textContent;
+            
+            try {
+                // ブラウザのClipboard APIでシステムクリップボードに書き込み
+                await navigator.clipboard.writeText(text);
+                
+                // ボタンの見た目を一時的に変更
+                btn.textContent = '✓ コピー完了';
+                btn.style.background = '#27ae60';
+                
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '';
+                }, 2000);
+                
+                // 成功通知（控えめ）
+                console.log('✅ クリップボードにコピーしました:', text.substring(0, 50) + '...');
+                
+            } catch (error) {
+                console.error('コピーエラー:', error);
+                
+                // フォールバック: 古いexecCommand方式
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    
+                    btn.textContent = '✓ コピー完了';
+                    btn.style.background = '#27ae60';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '';
+                    }, 2000);
+                } catch (fallbackError) {
+                    btn.textContent = '✗ 失敗';
+                    btn.style.background = '#e74c3c';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '';
+                    }, 2000);
+                    alert('❌ コピーに失敗しました。\nブラウザの設定でクリップボードアクセスを許可してください。');
+                }
+            }
         }
 
         // 起動
