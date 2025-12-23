@@ -50,7 +50,7 @@ def get_task(task_id):
 
 @simple_bp.route('/tasks/<int:task_id>/execute', methods=['POST'])
 def execute_task(task_id):
-    """タスクを実行（Playwright自動入力 + スクリーンショット）"""
+    """タスクを実行（Playwright自動入力 + VNC表示 + スクリーンショット）"""
     db = get_db_session()
     try:
         task = db.query(Task).options(
@@ -68,19 +68,46 @@ def execute_task(task_id):
         task.status = 'in_progress'
         db.commit()
         
-        # Playwright自動入力を実行（非同期）
+        # VNC環境でPlaywright自動入力を実行
+        from backend.services.automation_service import FormAutomationService
+        
         try:
-            result = asyncio.run(run_automation(task))
+            # VNC統合：headless=False, DISPLAY=:99
+            automation = FormAutomationService(headless=False, display=':99')
+            automation.start()
+            
+            # フォームデータ準備
+            message_data = task.form_data
+            
+            # フォーム自動入力実行
+            result = automation.fill_contact_form(
+                form_url=task.company.form_url,
+                message_data=message_data,
+                wait_for_captcha=True
+            )
+            
+            automation.stop()
             
             # 結果を保存
-            task.screenshot_path = result['screenshot_path']
-            task.status = 'in_progress'  # スクリーンショット確認待ち
+            if result.get('screenshot_path'):
+                task.screenshot_path = result['screenshot_path']
+            
+            # 送信完了を検出した場合はcompletedに、そうでなければin_progressのまま
+            if result.get('submitted'):
+                task.status = 'completed'
+                task.submitted = True
+                task.completed_at = datetime.utcnow()
+            else:
+                task.status = 'in_progress'  # reCAPTCHA・送信確認待ち
+            
             db.commit()
             
             return jsonify({
                 'success': True,
-                'message': 'Automation completed',
-                'screenshot_path': result['screenshot_path']
+                'message': 'Automation completed. Check VNC viewer.',
+                'submitted': result.get('submitted', False),
+                'screenshot_path': result.get('screenshot_path'),
+                'vnc_url': 'http://153.126.154.158:6080/vnc.html'
             })
             
         except Exception as e:

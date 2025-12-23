@@ -103,46 +103,58 @@ class FormAutomationService:
             # フォームフィールドの検出と入力
             fields_filled = []
             
-            # 名前フィールド
+            # 名前フィールド（sender_name または name キー対応）
+            name_value = message_data.get('sender_name') or message_data.get('name', '')
             name_selectors = [
+                'input[name="name"]',
+                'input[id="name"]',
                 'input[name*="name"]',
                 'input[id*="name"]',
                 'input[placeholder*="名前"]',
                 'input[placeholder*="お名前"]',
             ]
-            if self._fill_field(page, name_selectors, message_data.get('sender_name', '')):
+            if name_value and self._fill_field(page, name_selectors, name_value):
                 fields_filled.append('name')
             
-            # メールフィールド
+            # メールフィールド（sender_email または email キー対応）
+            email_value = message_data.get('sender_email') or message_data.get('email', '')
             email_selectors = [
+                'input[name="email"]',
+                'input[id="email"]',
                 'input[type="email"]',
                 'input[name*="email"]',
                 'input[name*="mail"]',
                 'input[id*="email"]',
             ]
-            if self._fill_field(page, email_selectors, message_data.get('sender_email', '')):
+            if email_value and self._fill_field(page, email_selectors, email_value):
                 fields_filled.append('email')
             
-            # 会社名フィールド
+            # 会社名フィールド（sender_company または company キー対応）
+            company_value = message_data.get('sender_company') or message_data.get('company', '')
             company_selectors = [
+                'input[name="company"]',
+                'input[id="company"]',
                 'input[name*="company"]',
                 'input[name*="kaisya"]',
                 'input[id*="company"]',
                 'input[placeholder*="会社"]',
                 'input[placeholder*="企業"]',
             ]
-            if self._fill_field(page, company_selectors, message_data.get('sender_company', '')):
+            if company_value and self._fill_field(page, company_selectors, company_value):
                 fields_filled.append('company')
             
-            # 電話番号フィールド（オプション）
+            # 電話番号フィールド（sender_phone または phone キー対応）
+            phone_value = message_data.get('sender_phone') or message_data.get('phone', '')
             phone_selectors = [
+                'input[name="phone"]',
+                'input[id="phone"]',
                 'input[type="tel"]',
                 'input[name*="phone"]',
                 'input[name*="tel"]',
                 'input[id*="phone"]',
             ]
-            if message_data.get('sender_phone'):
-                if self._fill_field(page, phone_selectors, message_data.get('sender_phone')):
+            if phone_value:
+                if self._fill_field(page, phone_selectors, phone_value):
                     fields_filled.append('phone')
             
             # メッセージフィールド
@@ -191,28 +203,7 @@ class FormAutomationService:
                     print("⚠️  作業者がブラウザを閉じました")
                     break
                 
-                # URL変化をチェック
-                current_url = page.url
-                if current_url != initial_url:
-                    if any(keyword in current_url.lower() for keyword in ['thank', 'success', 'confirm', 'complete']):
-                        submitted = True
-                        print(f"✅ 送信完了を検出しました（URL変化）！ ({i+1}秒後)")
-                        print(f"   遷移先URL: {current_url}")
-                        time.sleep(2)
-                        break
-                
-                # 成功メッセージが表示されたかチェック
-                try:
-                    success_element = page.locator('#success-message')
-                    if success_element.count() > 0 and success_element.is_visible():
-                        submitted = True
-                        print(f"✅ 送信完了を検出しました（成功メッセージ表示）！ ({i+1}秒後)")
-                        time.sleep(2)
-                        break
-                except:
-                    pass
-                
-                # フォームがリセットされたかチェック（入力値が消えた）
+                # フォームがリセットされたかチェック（最も確実な方法）
                 try:
                     current_name = page.locator('input[name="name"]').input_value()
                     if initial_name and current_name == '':
@@ -222,6 +213,41 @@ class FormAutomationService:
                         break
                 except:
                     pass
+                
+                # 成功メッセージが表示されたかチェック（0.5秒間隔で2回確認）
+                try:
+                    for selector in ['#result', '#success-message', '.success', '.thank-you']:
+                        success_element = page.locator(selector)
+                        if success_element.count() > 0:
+                            # 要素が存在する場合、visible状態をチェック
+                            try:
+                                if success_element.is_visible():
+                                    submitted = True
+                                    print(f"✅ 送信完了を検出しました（成功メッセージ表示: {selector}）！ ({i+1}秒後)")
+                                    time.sleep(2)
+                                    break
+                            except:
+                                # hiddenクラスの有無でチェック
+                                classes = success_element.get_attribute('class') or ''
+                                if 'hidden' not in classes.lower():
+                                    submitted = True
+                                    print(f"✅ 送信完了を検出しました（成功メッセージ表示: {selector}）！ ({i+1}秒後)")
+                                    time.sleep(2)
+                                    break
+                    if submitted:
+                        break
+                except Exception as e:
+                    pass
+                
+                # URL変化をチェック
+                current_url = page.url
+                if current_url != initial_url:
+                    if any(keyword in current_url.lower() for keyword in ['thank', 'success', 'confirm', 'complete']):
+                        submitted = True
+                        print(f"✅ 送信完了を検出しました（URL変化）！ ({i+1}秒後)")
+                        print(f"   遷移先URL: {current_url}")
+                        time.sleep(2)
+                        break
             
             if not submitted:
                 print("⚠️  送信完了を検出できませんでした（タイムアウト）")

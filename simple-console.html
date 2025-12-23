@@ -433,7 +433,8 @@
             }
 
             const canExecute = task.status === 'pending' || task.status === 'failed';
-            const canComplete = task.status === 'in_progress' && task.screenshot_path;
+            const isCompleted = task.status === 'completed';
+            const canComplete = (task.status === 'in_progress' && task.screenshot_path) || isCompleted;
 
             container.innerHTML = `
                 <!-- 企業情報 -->
@@ -487,9 +488,10 @@
                         🤖 自動入力実行
                     </button>
                     <button class="btn btn-success" 
-                            onclick="completeTask(${task.id})"
-                            ${!canComplete ? 'disabled' : ''}>
-                        ✅ 送信完了
+                            onclick="${isCompleted ? '' : `completeTask(${task.id})`}"
+                            ${!canComplete ? 'disabled' : ''}
+                            style="${isCompleted ? 'cursor: default;' : ''}">
+                        ✅ ${isCompleted ? '送信完了' : '送信完了'}
                     </button>
                     <button class="btn btn-secondary" 
                             onclick="window.open('${task.company.form_url}', '_blank')">
@@ -512,21 +514,40 @@
 
         // タスク実行
         async function executeTask(taskId) {
+            if (!confirm('このタスクを実行しますか？\nVNCビューアーでブラウザの動作を確認できます。')) {
+                return;
+            }
+
             try {
+                // ローディング表示
+                const btn = event.target;
+                btn.disabled = true;
+                btn.textContent = '実行中...';
+
                 const response = await fetch(`${API_BASE}/api/simple/tasks/${taskId}/execute`, {
                     method: 'POST'
                 });
                 
+                const result = await response.json();
+                
                 if (response.ok) {
-                    alert('自動入力を開始しました。完了までお待ちください...');
+                    alert(`✅ 自動入力完了！\n\nVNCビューアーでブラウザを確認してください：\n${result.vnc_url}\n\nreCAPTCHAを解決して送信してください。`);
+                    
+                    // VNCビューアーを新しいタブで開く
+                    if (confirm('VNCビューアーを開きますか？')) {
+                        window.open(result.vnc_url, '_blank');
+                    }
+                    
                     await loadTasks();
                 } else {
-                    const error = await response.json();
-                    alert(`エラー: ${error.message || '実行に失敗しました'}`);
+                    alert(`❌ エラー: ${result.error || '実行に失敗しました'}`);
                 }
             } catch (error) {
                 console.error('Execute failed:', error);
-                alert('実行に失敗しました');
+                alert('❌ 実行に失敗しました: ' + error.message);
+            } finally {
+                // ローディング解除
+                await loadTasks();
             }
         }
 
