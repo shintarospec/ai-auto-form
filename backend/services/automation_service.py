@@ -213,17 +213,23 @@ class FormAutomationService:
                     
                     document.body.appendChild(menu);
                     
-                    // 各入力欄に小さなボタンを追加
-                    const inputs = document.querySelectorAll('input[type="text"], input[type="email"], input[type="tel"], textarea');
-                    console.log('📝 Found ' + inputs.length + ' input fields');
+                    // 各入力欄にボタンを追加（シンプルな実装）
+                    const inputs = document.querySelectorAll('input, textarea');
+                    console.log('📝 Found ' + inputs.length + ' input/textarea fields');
                     
-                    inputs.forEach(function(input) {
+                    inputs.forEach(function(input, index) {
+                        console.log('Processing input ' + index + ': ' + input.tagName + ' ' + (input.type || 'textarea'));
+                        
+                        // ボタンコンテナを作成
+                        const container = document.createElement('div');
+                        container.style.cssText = 'display:inline-block;margin-left:8px;vertical-align:middle';
+                        
                         // ボタンを作成
                         const btn = document.createElement('button');
-                        btn.textContent = '📋';
+                        btn.textContent = '📋 データ選択';
                         btn.type = 'button';
-                        btn.style.cssText = 'position:absolute;margin-left:5px;padding:4px 8px;background:#2196F3;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px;z-index:1000';
-                        btn.title = 'データから入力';
+                        btn.style.cssText = 'padding:6px 12px;background:#2196F3;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-weight:bold;box-shadow:0 2px 4px rgba(0,0,0,0.2)';
+                        btn.title = 'フォームデータから選択';
                         
                         btn.onmouseover = function() { this.style.background = '#1976D2'; };
                         btn.onmouseout = function() { this.style.background = '#2196F3'; };
@@ -231,52 +237,35 @@ class FormAutomationService:
                         btn.onclick = function(e) {
                             e.preventDefault();
                             e.stopPropagation();
-                            console.log('📋 Button clicked for:', input.name || input.id);
+                            console.log('📋 Button clicked! Target:', input.name || input.id || input.placeholder);
                             
                             menu.targetElement = input;
                             
-                            // ボタンの位置を基準にメニューを表示
+                            // ボタンの下にメニューを表示
                             const rect = btn.getBoundingClientRect();
                             menu.style.left = (rect.left + window.scrollX) + 'px';
                             menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
                             menu.style.display = 'block';
+                            
+                            console.log('Menu displayed at:', menu.style.left, menu.style.top);
                         };
                         
-                        // 入力欄の親要素の位置を確認
-                        const parent = input.parentElement;
-                        if (parent && window.getComputedStyle(parent).position === 'static') {
-                            parent.style.position = 'relative';
-                        }
+                        container.appendChild(btn);
                         
-                        // ボタンを入力欄の後に挿入
-                        if (input.nextSibling) {
-                            input.parentNode.insertBefore(btn, input.nextSibling);
-                        } else {
-                            input.parentNode.appendChild(btn);
+                        // 入力欄の直後に挿入
+                        try {
+                            if (input.nextSibling) {
+                                input.parentNode.insertBefore(container, input.nextSibling);
+                            } else {
+                                input.parentNode.appendChild(container);
+                            }
+                            console.log('✅ Button added for input ' + index);
+                        } catch (e) {
+                            console.error('❌ Failed to add button:', e);
                         }
                     });
                     
-                    // 右クリックも残しておく（念のため）
-                    document.addEventListener('contextmenu', function(e) {
-                        const target = e.target;
-                        console.log('🖱️ Right-click detected on:', target.tagName, target.type);
-                        
-                        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-                            console.log('✅ Preventing default menu, showing custom menu');
-                            e.preventDefault();
-                            e.stopPropagation();
-                            e.stopImmediatePropagation();
-                            
-                            menu.targetElement = target;
-                            
-                            const rect = target.getBoundingClientRect();
-                            menu.style.left = (rect.left + window.scrollX) + 'px';
-                            menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
-                            menu.style.display = 'block';
-                            
-                            return false;
-                        }
-                    }, true);
+                    console.log('✅ All buttons processed');
                     
                     // メニューを閉じる
                     document.addEventListener('click', function(e) {
