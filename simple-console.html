@@ -23,6 +23,43 @@
             color: white;
             padding: 1rem 2rem;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-content {
+            flex: 1;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .refresh-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .refresh-btn:hover {
+            background: #2980b9;
+        }
+
+        .refresh-btn.refreshing {
+            background: #95a5a6;
+            cursor: not-allowed;
         }
 
         .header h1 {
@@ -193,12 +230,21 @@
             font-weight: 600;
         }
 
-        .form-field .value {
-            background: white;
-            padding: 0.5rem;
+        .field-value-display {
+            background: #f8f9fa;
+            padding: 0.75rem;
             border-radius: 4px;
             border: 1px solid #e0e0e0;
             font-size: 0.875rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            line-height: 1.6;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-field .copy-btn {
+            width: 100%;
         }
 
         .screenshot-area {
@@ -359,8 +405,20 @@
 </head>
 <body>
     <div class="header">
-        <h1>🤖 AI Auto Form - Phase 2-3 VNC統合</h1>
-        <p>🎯 半手動システム: 自動入力→目視確認→手動修正→送信 | VNCでリアルタイム確認・修正</p>
+        <div class="header-content">
+            <h1>🤖 AI Auto Form - Phase 2-3 VNC統合</h1>
+            <p>🎯 半手動システム: 自動入力→目視確認→手動修正→送信 | VNCでリアルタイム確認・修正</p>
+        </div>
+        <div class="header-actions">
+            <button class="refresh-btn" onclick="resetAllTasks()" style="background: #e67e22;">
+                <span>🔄</span>
+                <span>全タスクリセット</span>
+            </button>
+            <button class="refresh-btn" onclick="manualRefresh()">
+                <span id="refresh-icon">🔄</span>
+                <span id="refresh-text">更新</span>
+            </button>
+        </div>
     </div>
 
     <div class="container">
@@ -478,6 +536,57 @@
             }
         }
 
+        // 手動リフレッシュ
+        async function manualRefresh() {
+            const btn = document.querySelector('.refresh-btn');
+            const icon = document.getElementById('refresh-icon');
+            const text = document.getElementById('refresh-text');
+            
+            // リフレッシュ中の表示
+            btn.classList.add('refreshing');
+            btn.disabled = true;
+            icon.textContent = '⏳';
+            text.textContent = '更新中...';
+            
+            await loadTasks();
+            
+            // 完了表示
+            icon.textContent = '✓';
+            text.textContent = '完了';
+            
+            setTimeout(() => {
+                btn.classList.remove('refreshing');
+                btn.disabled = false;
+                icon.textContent = '🔄';
+                text.textContent = '更新';
+            }, 1000);
+        }
+
+        // 全タスクをリセット
+        async function resetAllTasks() {
+            if (!confirm('全てのタスクを未処理状態にリセットしますか？\n\n処理中・完了・失敗のタスクが全て未処理に戻ります。')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/simple/tasks/reset`, {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    alert(`✅ ${result.reset_count}件のタスクをリセットしました`);
+                    await loadTasks();
+                } else {
+                    alert(`❌ リセット失敗: ${result.error || '不明なエラー'}`);
+                }
+            } catch (error) {
+                console.error('Reset failed:', error);
+                alert('❌ リセットに失敗しました');
+            }
+        }
+
         // 統計情報を更新
         function updateStats() {
             document.getElementById('stat-total').textContent = tasks.length;
@@ -555,9 +664,10 @@
                     <h4>📝 自動入力データ（参照用・手動入力不要）</h4>
                     <div class="form-data">
                         ${Object.entries(task.form_data).map(([key, value]) => `
-                            <div class="form-field">
-                                <label>${key} <button class="copy-btn" onclick="sendToVNC('${value.replace(/'/g, "\\'")}', event)">VNCに送信</button></label>
-                                <textarea class="value" readonly onclick="this.select()" style="cursor: text; resize: vertical; min-height: 40px; font-family: inherit;">${value}</textarea>
+                            <div class="form-field" data-field-name="${key}">
+                                <label>${key}</label>
+                                <div class="field-value-display">${value}</div>
+                                <button class="copy-btn vnc-auto-paste-btn">⚡ 自動ペースト</button>
                             </div>
                         `).join('')}
                     </div>
@@ -604,6 +714,19 @@
                     </div>
                 </div>
             `;
+            
+            // 自動ペーストボタンのイベントリスナーを設定
+            setTimeout(() => {
+                document.querySelectorAll('.vnc-auto-paste-btn').forEach(button => {
+                    button.addEventListener('click', function(event) {
+                        event.stopPropagation();
+                        const fieldDiv = this.closest('.form-field');
+                        const valueDisplay = fieldDiv.querySelector('.field-value-display');
+                        const text = valueDisplay.textContent;
+                        autoPasteToVNC(text, event);
+                    });
+                });
+            }, 0);
         }
 
         // タスク実行
@@ -697,7 +820,7 @@
             return date.toLocaleString('ja-JP');
         }
 
-        // クリップボードに直接コピー（VNCで即ペースト可能）
+        // VNC内のクリップボードにデータを送信（API経由）
         async function sendToVNC(text, event) {
             event.stopPropagation(); // 親要素のクリックイベントを防ぐ
             
@@ -705,69 +828,92 @@
             const originalText = btn.textContent;
             
             try {
-                // 1. ブラウザのClipboard APIでシステムクリップボードに書き込み
-                await navigator.clipboard.writeText(text);
+                // API経由でVNC内のクリップボードに書き込み
+                const response = await fetch('http://153.126.154.158:5001/api/simple/vnc/send-data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: text })
+                });
                 
-                // 2. noVNCのClipboardパネルに直接送信（iframe経由）
-                try {
-                    const vncFrame = document.getElementById('vnc-frame');
-                    const vncWindow = vncFrame.contentWindow;
+                const result = await response.json();
+                
+                if (result.success) {
+                    // ボタンの見た目を一時的に変更
+                    btn.textContent = '✓ クリップボードにコピー';
+                    btn.style.background = '#27ae60';
                     
-                    // noVNCのクリップボードテキストエリアに直接書き込み
-                    const clipboardTextarea = vncWindow.document.getElementById('noVNC_clipboard_text');
-                    if (clipboardTextarea) {
-                        clipboardTextarea.value = text;
-                        // Send Clipboardボタンをクリック
-                        const sendButton = vncWindow.document.getElementById('noVNC_clipboard_clear_button');
-                        if (sendButton && sendButton.previousElementSibling) {
-                            sendButton.previousElementSibling.click(); // Send Clipboardボタン
-                        }
-                    }
-                } catch (iframeError) {
-                    console.log('iframe access blocked (expected):', iframeError.message);
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '';
+                    }, 2000);
+                    
+                    console.log('✅ VNC内のクリップボードに送信しました:', text.substring(0, 50) + '...');
+                    console.log('💡 VNC画面でCtrl+Vでペーストしてください');
+                } else {
+                    throw new Error(result.error || 'Unknown error');
                 }
                 
-                // ボタンの見た目を一時的に変更
-                btn.textContent = '✓ コピー完了';
-                btn.style.background = '#27ae60';
+            } catch (error) {
+                console.error('VNC送信エラー:', error);
                 
+                btn.textContent = '✗ 送信失敗';
+                btn.style.background = '#e74c3c';
                 setTimeout(() => {
                     btn.textContent = originalText;
                     btn.style.background = '';
                 }, 2000);
                 
-                // 成功通知（控えめ）
-                console.log('✅ クリップボードにコピーしました:', text.substring(0, 50) + '...');
+                alert(`❌ VNC送信に失敗しました。\nエラー: ${error.message}`);
+            }
+        }
+
+        // VNC内のフォーカス中フィールドに自動ペースト
+        async function autoPasteToVNC(text, event) {
+            event.stopPropagation();
+            
+            const btn = event.target;
+            const originalText = btn.textContent;
+            
+            try {
+                // API経由で自動ペースト
+                const response = await fetch('http://153.126.154.158:5001/api/simple/vnc/auto-paste', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text: text })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // ボタンの見た目を一時的に変更
+                    btn.textContent = '✓ ペースト完了';
+                    btn.style.background = '#27ae60';
+                    
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '';
+                    }, 2000);
+                    
+                    console.log('✅ VNC内のフィールドに自動ペーストしました:', text.substring(0, 50) + '...');
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
                 
             } catch (error) {
-                console.error('コピーエラー:', error);
+                console.error('自動ペーストエラー:', error);
                 
-                // フォールバック: 古いexecCommand方式
-                try {
-                    const textarea = document.createElement('textarea');
-                    textarea.value = text;
-                    textarea.style.position = 'fixed';
-                    textarea.style.opacity = '0';
-                    document.body.appendChild(textarea);
-                    textarea.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(textarea);
-                    
-                    btn.textContent = '✓ コピー完了';
-                    btn.style.background = '#27ae60';
-                    setTimeout(() => {
-                        btn.textContent = originalText;
-                        btn.style.background = '';
-                    }, 2000);
-                } catch (fallbackError) {
-                    btn.textContent = '✗ 失敗';
-                    btn.style.background = '#e74c3c';
-                    setTimeout(() => {
-                        btn.textContent = originalText;
-                        btn.style.background = '';
-                    }, 2000);
-                    alert('❌ コピーに失敗しました。\nブラウザの設定でクリップボードアクセスを許可してください。');
-                }
+                btn.textContent = '✗ ペースト失敗';
+                btn.style.background = '#e74c3c';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.background = '';
+                }, 2000);
+                
+                alert(`❌ 自動ペーストに失敗しました。\nエラー: ${error.message}\n\nVNC画面でフィールドをクリックしてフォーカスしてから再試行してください。`);
             }
         }
 

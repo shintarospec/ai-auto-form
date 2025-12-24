@@ -39,7 +39,10 @@ class FormAutomationService:
                     '--disable-blink-features=AutomationControlled',
                     '--disable-dev-shm-usage',
                     '--no-sandbox',
-                    '--disable-gpu'  # VNC環境向け
+                    '--disable-gpu',  # VNC環境向け
+                    '--disable-cache',  # キャッシュ完全無効化
+                    '--disk-cache-size=0',  # ディスクキャッシュ無効化
+                    '--disable-application-cache'  # アプリケーションキャッシュ無効化
                 ]
             )
             print(f"✅ ブラウザ(Chromium)を起動しました (headless={self.headless}, DISPLAY={os.environ.get('DISPLAY', 'default')})")
@@ -132,85 +135,43 @@ class FormAutomationService:
                 print(f"❌ JavaScriptエラー（初期化）: {e}")
                 raise
             
-            # メインのデータパネル＆メニュー埋め込み
-            print("📋 データパネルとカスタムメニューを作成中...")
+            print(f"✅ ページを開きました: {form_url}")
             
+            # Enterキーによるフォーム誤送信を防ぐ
             try:
-                result = page.evaluate("""
-                    (formData) => {
-                        console.log('🔹 Creating panel and menu with data:', formData);
-                    window.formData = formData;
-                    
-                    // データパネルを作成
-                    const panel = document.createElement('div');
-                    panel.id = 'form-data-panel';
-                    panel.style.cssText = 'position:fixed;top:10px;right:10px;background:rgba(33,150,243,0.95);color:white;padding:15px;border-radius:8px;font-family:sans-serif;font-size:13px;z-index:999999;max-width:300px;max-height:600px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.3)';
-                    
-                    // タイトルと使い方説明
-                    const header = document.createElement('div');
-                    header.style.cssText = 'margin-bottom:12px;padding-bottom:12px;border-bottom:2px solid rgba(255,255,255,0.3)';
-                    
-                    const title = document.createElement('div');
-                    title.textContent = '📋 フォーム入力データ';
-                    title.style.cssText = 'font-weight:bold;font-size:14px;margin-bottom:8px';
-                    header.appendChild(title);
-                    
-                    const instruction = document.createElement('div');
-                    instruction.style.cssText = 'font-size:11px;line-height:1.5;opacity:0.9;background:rgba(255,255,255,0.1);padding:8px;border-radius:4px';
-                    instruction.innerHTML = '✅ <strong>使い方</strong><br>① 下のデータをクリック（コピー）<br>② VNC画面の入力欄を右クリック<br>③ 「Paste」を選択して貼り付け';
-                    header.appendChild(instruction);
-                    
-                    panel.appendChild(header);
-                    
-                    // 各データフィールド
-                    Object.keys(window.formData).forEach(function(key) {
-                        const value = window.formData[key];
-                        const item = document.createElement('div');
-                        item.className = 'data-item';
-                        item.style.cssText = 'margin:8px 0;padding:8px;background:rgba(255,255,255,0.15);border-radius:4px;cursor:pointer;transition:background 0.2s;user-select:none';
+                page.evaluate("""
+                    () => {
+                        console.log('🛡️ Enterキー送信防止を設定中...');
                         
-                        item.onmouseover = function() { this.style.background = 'rgba(255,255,255,0.25)'; };
-                        item.onmouseout = function() { this.style.background = 'rgba(255,255,255,0.15)'; };
+                        // すべてのinput要素（textarea以外）でEnterキーを無効化
+                        document.addEventListener('keydown', function(e) {
+                            // Enterキー（キーコード13）の場合
+                            if (e.key === 'Enter' || e.keyCode === 13) {
+                                const target = e.target;
+                                
+                                // input要素（text, email, tel等）の場合のみ防止
+                                // textarea、button、submitは除外
+                                if (target.tagName === 'INPUT' && 
+                                    target.type !== 'submit' && 
+                                    target.type !== 'button') {
+                                    e.preventDefault();
+                                    console.log('🛡️ Enterキーによるフォーム送信を防止しました');
+                                    return false;
+                                }
+                            }
+                        }, true);
                         
-                        // 左クリック: クリップボードにコピー
-                        item.onclick = function() {
-                            navigator.clipboard.writeText(value);
-                            this.style.background = 'rgba(76,175,80,0.8)';
-                            const self = this;
-                            setTimeout(function() { self.style.background = 'rgba(255,255,255,0.15)'; }, 1000);
-                        };
+                        // フォームのsubmitイベントも監視（二重防止）
+                        document.addEventListener('submit', function(e) {
+                            console.log('⚠️ フォーム送信が検出されました');
+                        }, true);
                         
-                        const label = document.createElement('div');
-                        label.textContent = key.replace(/_/g, ' ');
-                        label.style.cssText = 'font-size:11px;opacity:0.8;margin-bottom:4px';
-                        item.appendChild(label);
-                        
-                        const val = document.createElement('div');
-                        val.textContent = String(value);
-                        val.style.cssText = 'word-break:break-all;font-size:12px';
-                        item.appendChild(val);
-                        
-                        panel.appendChild(item);
-                    });
-                    
-                    const note = document.createElement('div');
-                    note.textContent = '💡 クリックでコピー＆自動入力';
-                    note.style.cssText = 'margin-top:10px;font-size:11px;opacity:0.7;text-align:center';
-                    panel.appendChild(note);
-                    
-                    document.body.appendChild(panel);
-                    
-                    console.log('✅ Data panel with auto-fill loaded', formData);
-                    return { 
-                        success: true, 
-                        panelExists: !!document.getElementById('form-data-panel')
-                    };
-                }
-            """, message_data)
-                print(f"✅ データパネル＆メニュー作成成功: {result}")
+                        console.log('✅ Enterキー送信防止を設定完了');
+                    }
+                """)
+                print("✅ Enterキー送信防止を設定しました")
             except Exception as e:
-                print(f"❌ JavaScriptエラー（パネル作成）: {e}")
-                raise
+                print(f"⚠️ Enterキー防止設定エラー（続行します）: {e}")
             
             # フォームフィールドの検出と入力
             fields_filled = []

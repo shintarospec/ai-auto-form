@@ -251,3 +251,113 @@ def reset_tasks():
         return jsonify({'error': str(e)}), 500
     finally:
         db.close()
+
+
+@simple_bp.route('/vnc/send-data', methods=['POST'])
+def send_to_vnc():
+    """VNC内のブラウザに直接データを送信（クリップボード経由）"""
+    data = request.get_json()
+    
+    if not data or 'text' not in data:
+        return jsonify({'error': 'text field is required'}), 400
+    
+    text_to_send = data['text']
+    
+    try:
+        # VNC内のクリップボードに書き込み（xsel/xclipコマンド使用）
+        import subprocess
+        import os
+        
+        # デバッグログ
+        print(f"🔍 [VNC Send] テキスト長: {len(text_to_send)}")
+        print(f"🔍 [VNC Send] 先頭100文字: {text_to_send[:100]}")
+        
+        # DISPLAY環境変数を設定
+        env = os.environ.copy()
+        env['DISPLAY'] = ':99'
+        
+        # xselコマンドでクリップボードに書き込み
+        process = subprocess.Popen(
+            ['xsel', '-b', '-i'],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env
+        )
+        stdout, stderr = process.communicate(input=text_to_send.encode('utf-8'))
+        
+        # デバッグログ
+        print(f"🔍 [xsel] Return code: {process.returncode}")
+        if stdout:
+            print(f"🔍 [xsel] stdout: {stdout.decode('utf-8')}")
+        if stderr:
+            print(f"🔍 [xsel] stderr: {stderr.decode('utf-8')}")
+        
+        if process.returncode == 0:
+            print(f"✅ [VNC Send] クリップボードに書き込み成功")
+            return jsonify({
+                'success': True,
+                'message': f'Sent {len(text_to_send)} characters to VNC clipboard',
+                'hint': 'VNC画面でCtrl+Vでペーストしてください'
+            })
+        else:
+            raise Exception(f'xsel command failed with code {process.returncode}: {stderr.decode("utf-8") if stderr else "no error message"}')
+        
+    except Exception as e:
+        print(f"❌ [VNC Send] エラー: {str(e)}")
+        return jsonify({'error': f'Failed to send to VNC: {str(e)}'}), 500
+
+
+@simple_bp.route('/vnc/auto-paste', methods=['POST'])
+def auto_paste_to_vnc():
+    """VNC内のフォーカス中フィールドに自動ペースト"""
+    data = request.get_json()
+    
+    if not data or 'text' not in data:
+        return jsonify({'error': 'text field is required'}), 400
+    
+    text_to_send = data['text']
+    
+    try:
+        import subprocess
+        import os
+        
+        print(f"🤖 [Auto Paste] テキスト長: {len(text_to_send)}")
+        
+        # DISPLAY環境変数を設定
+        env = os.environ.copy()
+        env['DISPLAY'] = ':99'
+        
+        # 1. クリップボードに書き込み
+        process = subprocess.Popen(
+            ['xsel', '-b', '-i'],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env
+        )
+        stdout, stderr = process.communicate(input=text_to_send.encode('utf-8'))
+        
+        if process.returncode != 0:
+            raise Exception(f'xsel failed: {stderr.decode("utf-8") if stderr else "unknown error"}')
+        
+        # 2. xdotoolでCtrl+Vキーストロークを送信
+        paste_process = subprocess.run(
+            ['xdotool', 'key', '--delay', '100', 'ctrl+v'],
+            env=env,
+            capture_output=True,
+            text=True
+        )
+        
+        if paste_process.returncode != 0:
+            raise Exception(f'xdotool failed: {paste_process.stderr}')
+        
+        print(f"✅ [Auto Paste] 自動ペースト成功")
+        return jsonify({
+            'success': True,
+            'message': f'Auto-pasted {len(text_to_send)} characters to focused field'
+        })
+        
+    except Exception as e:
+        print(f"❌ [Auto Paste] エラー: {str(e)}")
+        return jsonify({'error': f'Failed to auto-paste: {str(e)}'}), 500
