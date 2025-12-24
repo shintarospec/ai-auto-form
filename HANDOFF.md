@@ -99,6 +99,51 @@ curl http://localhost:5001/api/simple/tasks | jq
 
 ---
 
+## 🔧 Flask再起動の確実な手順（重要）
+
+### 問題
+コード変更後にFlaskを再起動しても、Pythonキャッシュやインポート済みモジュールにより変更が反映されないことがある。
+
+### 解決策：確実な手順
+
+```bash
+# 1. コード編集（ローカル）
+# automation_service.py等を編集
+
+# 2. VPSに転送
+scp backend/services/automation_service.py ubuntu@153.126.154.158:/opt/ai-auto-form/backend/services/
+
+# 3. Flask再起動スクリプト実行
+bash restart-flask-vps.sh
+
+# または手動の場合：
+ssh ubuntu@153.126.154.158 '
+  pkill -9 -f "python.*app.py"
+  cd /opt/ai-auto-form
+  find . -name "*.pyc" -delete
+  find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+  bash start-flask.sh
+'
+
+# 4. 検証
+# - simple-console.htmlからタスク実行
+# - debug_screenshots/panel_content_*.txt でタイムスタンプ確認
+# - VNC画面で目視確認
+```
+
+### ポート設定（固定）
+- **Flaskポート**: 5001（start-flask.shで`PORT=5001`設定済み）
+- **HTTPサーバー**: 8000
+- **VNC**: 6080
+
+### トラブルシューティング
+1. VPS上のコードを確認: `grep -n "検索文字列" /opt/ai-auto-form/backend/services/automation_service.py`
+2. Flaskプロセス確認: `ps aux | grep "python.*app.py"`
+3. Pythonキャッシュ完全削除 + Flask強制再起動（上記手順）
+4. ブラウザキャッシュクリア: Ctrl+Shift+R
+
+---
+
 ## 📁 重要なファイル構成
 
 ### Phase 1 MVP（現在使用中）

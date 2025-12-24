@@ -123,3 +123,56 @@ ssh root@153.126.154.158  # 使用禁止
 - 既存コードとの一貫性
 - 理解しやすさ（複雑なパターンより単純な実装）
 - 段階的な改善（一度で完璧を目指さない）
+## 🔧 開発・デプロイフロー（重要）
+
+### Flask再起動の確実な手順
+
+**問題**: コード変更後にFlaskを再起動しても、Pythonキャッシュやインポート済みモジュールにより変更が反映されないことがある
+
+**解決策**: 以下の確実な手順を必ず実行
+
+```bash
+# 1. コード編集（ローカル）
+# automation_service.py等を編集
+
+# 2. VPSに転送
+scp backend/services/automation_service.py ubuntu@153.126.154.158:/opt/ai-auto-form/backend/services/
+
+# 3. Flask再起動（確実な方法）
+bash restart-flask-vps.sh
+
+# または手動の場合：
+ssh ubuntu@153.126.154.158 '
+  pkill -9 -f "python.*app.py"
+  cd /opt/ai-auto-form
+  find . -name "*.pyc" -delete
+  find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+  bash start-flask.sh
+'
+
+# 4. タスク実行して検証
+# simple-console.htmlからタスク実行
+# VNC画面で変更が反映されているか確認
+```
+
+### ポート設定（固定）
+
+- **Flaskポート**: 5001（`start-flask.sh`で`PORT=5001`設定済み）
+- **HTTPサーバーポート**: 8000（simple-console.html配信用）
+- **VNCポート**: 6080（noVNC Web UI）
+
+**注意**: simple-console.htmlは5001を期待しているため、Flaskは必ず5001で起動すること
+
+### 変更反映の検証方法
+
+1. **DOM確認**: `debug_screenshots/panel_content_*.txt` でタイムスタンプ確認
+2. **スクリーンショット**: `debug_screenshots/panel_debug_*.png` で視覚確認
+3. **VNC画面**: 実際のブラウザで目視確認（ブラウザキャッシュに注意）
+
+### トラブルシューティング
+
+**変更が反映されない場合**:
+1. VPS上のコードを確認: `ssh ubuntu@153.126.154.158 'grep -n "検索文字列" /opt/ai-auto-form/backend/services/automation_service.py'`
+2. Flaskプロセスを確認: `ssh ubuntu@153.126.154.158 'ps aux | grep "python.*app.py"'`
+3. Pythonキャッシュ完全削除 + Flask強制再起動（上記手順）
+4. ブラウザキャッシュクリア: Ctrl+Shift+R（VNC画面とsimple-console.html両方）
