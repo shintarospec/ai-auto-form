@@ -161,10 +161,44 @@ class FormAutomationService:
                         item.onmouseover = function() { this.style.background = 'rgba(255,255,255,0.25)'; };
                         item.onmouseout = function() { this.style.background = 'rgba(255,255,255,0.15)'; };
                         item.onclick = function() {
+                            // クリックでコピー＆自動入力
                             navigator.clipboard.writeText(value);
+                            
+                            // 緑色に変化（コピー成功）
                             this.style.background = 'rgba(76,175,80,0.8)';
                             const self = this;
                             setTimeout(function() { self.style.background = 'rgba(255,255,255,0.15)'; }, 1000);
+                            
+                            // 該当する入力欄を探して自動入力
+                            let targetInput = null;
+                            
+                            // キー名から適切な入力欄を探す
+                            if (key.includes('company') || key.includes('kaisya')) {
+                                targetInput = document.querySelector('input[name*="company"], input[name*="kaisya"], input[placeholder*="会社"], input[placeholder*="企業"]');
+                            } else if (key.includes('email') || key.includes('mail')) {
+                                targetInput = document.querySelector('input[type="email"], input[name*="email"], input[name*="mail"]');
+                            } else if (key.includes('phone') || key.includes('tel')) {
+                                targetInput = document.querySelector('input[type="tel"], input[name*="phone"], input[name*="tel"], input[placeholder*="電話"]');
+                            } else if (key.includes('name') || key.includes('namae')) {
+                                targetInput = document.querySelector('input[name*="name"]:not([name*="company"]), input[placeholder*="名前"], input[placeholder*="お名前"]');
+                            } else if (key.includes('message') || key.includes('content')) {
+                                targetInput = document.querySelector('textarea[name*="message"], textarea[name*="content"], textarea[placeholder*="内容"], textarea[placeholder*="問い合わせ"]');
+                            }
+                            
+                            // 入力欄が見つかったら値を設定
+                            if (targetInput) {
+                                targetInput.value = value;
+                                targetInput.focus();
+                                targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+                                targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+                                
+                                // 入力欄を一時的にハイライト
+                                const originalBorder = targetInput.style.border;
+                                targetInput.style.border = '3px solid #4CAF50';
+                                setTimeout(function() {
+                                    targetInput.style.border = originalBorder;
+                                }, 1500);
+                            }
                         };
                         
                         const label = document.createElement('div');
@@ -181,104 +215,16 @@ class FormAutomationService:
                     });
                     
                     const note = document.createElement('div');
-                    note.textContent = '💡 クリックでコピー → 右クリックでペースト';
+                    note.textContent = '💡 クリックでコピー＆自動入力';
                     note.style.cssText = 'margin-top:10px;font-size:11px;opacity:0.7;text-align:center';
                     panel.appendChild(note);
                     
                     document.body.appendChild(panel);
                     
-                    // カスタム右クリックメニューを作成
-                    const menu = document.createElement('div');
-                    menu.id = 'custom-context-menu';
-                    menu.style.cssText = 'display:none;position:fixed;background:white;border:1px solid #ccc;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:1000000;min-width:200px';
-                    
-                    Object.keys(window.formData).forEach(function(key) {
-                        const value = window.formData[key];
-                        const menuItem = document.createElement('div');
-                        menuItem.textContent = key.replace(/_/g, ' ') + ': ' + String(value).substring(0, 30) + '...';
-                        menuItem.style.cssText = 'padding:8px 12px;cursor:pointer;font-size:13px;color:#333;border-bottom:1px solid #eee';
-                        menuItem.onmouseover = function() { this.style.background = '#f0f0f0'; };
-                        menuItem.onmouseout = function() { this.style.background = 'white'; };
-                        menuItem.onclick = function(e) {
-                            e.stopPropagation();
-                            const target = menu.targetElement;
-                            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
-                                target.value = value;
-                                target.dispatchEvent(new Event('input', { bubbles: true }));
-                            }
-                            menu.style.display = 'none';
-                        };
-                        menu.appendChild(menuItem);
-                    });
-                    
-                    document.body.appendChild(menu);
-                    
-                    // 各入力欄にボタンを追加（シンプルな実装）
-                    const inputs = document.querySelectorAll('input, textarea');
-                    console.log('📝 Found ' + inputs.length + ' input/textarea fields');
-                    
-                    inputs.forEach(function(input, index) {
-                        console.log('Processing input ' + index + ': ' + input.tagName + ' ' + (input.type || 'textarea'));
-                        
-                        // ボタンコンテナを作成
-                        const container = document.createElement('div');
-                        container.style.cssText = 'display:inline-block;margin-left:8px;vertical-align:middle';
-                        
-                        // ボタンを作成
-                        const btn = document.createElement('button');
-                        btn.textContent = '📋 データ選択';
-                        btn.type = 'button';
-                        btn.style.cssText = 'padding:6px 12px;background:#2196F3;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-weight:bold;box-shadow:0 2px 4px rgba(0,0,0,0.2)';
-                        btn.title = 'フォームデータから選択';
-                        
-                        btn.onmouseover = function() { this.style.background = '#1976D2'; };
-                        btn.onmouseout = function() { this.style.background = '#2196F3'; };
-                        
-                        btn.onclick = function(e) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            console.log('📋 Button clicked! Target:', input.name || input.id || input.placeholder);
-                            
-                            menu.targetElement = input;
-                            
-                            // ボタンの下にメニューを表示
-                            const rect = btn.getBoundingClientRect();
-                            menu.style.left = (rect.left + window.scrollX) + 'px';
-                            menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
-                            menu.style.display = 'block';
-                            
-                            console.log('Menu displayed at:', menu.style.left, menu.style.top);
-                        };
-                        
-                        container.appendChild(btn);
-                        
-                        // 入力欄の直後に挿入
-                        try {
-                            if (input.nextSibling) {
-                                input.parentNode.insertBefore(container, input.nextSibling);
-                            } else {
-                                input.parentNode.appendChild(container);
-                            }
-                            console.log('✅ Button added for input ' + index);
-                        } catch (e) {
-                            console.error('❌ Failed to add button:', e);
-                        }
-                    });
-                    
-                    console.log('✅ All buttons processed');
-                    
-                    // メニューを閉じる
-                    document.addEventListener('click', function(e) {
-                        if (!menu.contains(e.target)) {
-                            menu.style.display = 'none';
-                        }
-                    });
-                    
-                    console.log('✅ Data panel with custom context menu loaded', formData);
+                    console.log('✅ Data panel with auto-fill loaded', formData);
                     return { 
                         success: true, 
-                        panelExists: !!document.getElementById('form-data-panel'),
-                        menuExists: !!document.getElementById('custom-context-menu')
+                        panelExists: !!document.getElementById('form-data-panel')
                     };
                 }
             """, message_data)
