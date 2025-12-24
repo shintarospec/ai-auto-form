@@ -49,12 +49,17 @@ def index():
     })
 
 # ========================================
-# Static Files (Screenshots)
+# Static Files (Screenshots & HTML)
 # ========================================
+@app.route('/simple-console.html')
+def serve_simple_console():
+    """Simple Console UIを配信"""
+    return send_from_directory('/opt/ai-auto-form', 'simple-console.html')
+
 @app.route('/screenshots/<path:filename>')
 def serve_screenshot(filename):
     """スクリーンショット画像を配信"""
-    screenshots_dir = '/workspaces/ai-auto-form/screenshots'
+    screenshots_dir = '/opt/ai-auto-form/screenshots'
     return send_from_directory(screenshots_dir, filename)
 
 # ========================================
