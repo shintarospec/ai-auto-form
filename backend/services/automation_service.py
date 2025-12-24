@@ -101,6 +101,56 @@ class FormAutomationService:
             page.goto(form_url, wait_until='networkidle', timeout=30000)
             time.sleep(2)
             
+            # ページにフォームデータを埋め込む（VNC内でコピー可能に）
+            print("📋 ページにフォームデータを埋め込んでいます...")
+            page.evaluate(f"""
+                // フォームデータをページ内に保存
+                window.formData = {message_data};
+                
+                // コピー用のUI要素を作成
+                const dataPanel = document.createElement('div');
+                dataPanel.id = 'form-data-helper';
+                dataPanel.style.cssText = `
+                    position: fixed;
+                    top: 10px;
+                    right: 10px;
+                    background: rgba(33, 150, 243, 0.95);
+                    color: white;
+                    padding: 15px;
+                    border-radius: 8px;
+                    font-family: monospace;
+                    font-size: 13px;
+                    z-index: 999999;
+                    max-width: 300px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                `;
+                
+                let html = '<strong>📋 フォームデータ（クリックでコピー）</strong><br><br>';
+                
+                const data = window.formData;
+                for (const [key, value] of Object.entries(data)) {{
+                    const cleanKey = key.replace(/_/g, ' ');
+                    html += `<div style="margin: 8px 0; cursor: pointer; padding: 5px; background: rgba(255,255,255,0.1); border-radius: 4px;" 
+                                  onclick="
+                                    navigator.clipboard.writeText('${{value}}').then(() => {{
+                                        this.style.background = 'rgba(76, 175, 80, 0.8)';
+                                        setTimeout(() => {{ this.style.background = 'rgba(255,255,255,0.1)'; }}, 1500);
+                                    }});
+                                  ">
+                        <strong>${{cleanKey}}:</strong><br>
+                        <span style="word-break: break-all;">${{value}}</span>
+                    </div>`;
+                }}
+                
+                html += '<br><small style="opacity: 0.8;">※ 各項目をクリックでコピー → フォームにCtrl+Vでペースト</small>';
+                dataPanel.innerHTML = html;
+                document.body.appendChild(dataPanel);
+                
+                // コンソールにも出力
+                console.log('📋 フォームデータ:', window.formData);
+                console.log('💡 使い方: 右上のパネルから項目をクリックしてコピー');
+            """)
+            
             # フォームフィールドの検出と入力
             fields_filled = []
             
