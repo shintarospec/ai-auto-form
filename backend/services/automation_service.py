@@ -146,10 +146,21 @@ class FormAutomationService:
                     panel.id = 'form-data-panel';
                     panel.style.cssText = 'position:fixed;top:10px;right:10px;background:rgba(33,150,243,0.95);color:white;padding:15px;border-radius:8px;font-family:sans-serif;font-size:13px;z-index:999999;max-width:300px;max-height:600px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.3)';
                     
+                    // タイトルと使い方説明
+                    const header = document.createElement('div');
+                    header.style.cssText = 'margin-bottom:12px;padding-bottom:12px;border-bottom:2px solid rgba(255,255,255,0.3)';
+                    
                     const title = document.createElement('div');
-                    title.textContent = '📋 左クリック: コピー / 右クリック: 入力先選択';
-                    title.style.cssText = 'font-weight:bold;margin-bottom:10px;font-size:13px;line-height:1.4';
-                    panel.appendChild(title);
+                    title.textContent = '📋 フォーム入力データ';
+                    title.style.cssText = 'font-weight:bold;font-size:14px;margin-bottom:8px';
+                    header.appendChild(title);
+                    
+                    const instruction = document.createElement('div');
+                    instruction.style.cssText = 'font-size:11px;line-height:1.5;opacity:0.9;background:rgba(255,255,255,0.1);padding:8px;border-radius:4px';
+                    instruction.innerHTML = '✅ <strong>使い方</strong><br>① 下のデータをクリック（コピー）<br>② VNC画面の入力欄を右クリック<br>③ 「Paste」を選択して貼り付け';
+                    header.appendChild(instruction);
+                    
+                    panel.appendChild(header);
                     
                     // 各データフィールド
                     Object.keys(window.formData).forEach(function(key) {
@@ -167,90 +178,6 @@ class FormAutomationService:
                             this.style.background = 'rgba(76,175,80,0.8)';
                             const self = this;
                             setTimeout(function() { self.style.background = 'rgba(255,255,255,0.15)'; }, 1000);
-                        };
-                        
-                        // 右クリック: フィールド選択メニュー表示
-                        item.oncontextmenu = function(e) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            
-                            // 既存のメニューを削除
-                            const oldMenu = document.getElementById('field-selector-menu');
-                            if (oldMenu) oldMenu.remove();
-                            
-                            // 全ての入力欄を検出
-                            const allInputs = document.querySelectorAll('input, textarea, select');
-                            if (allInputs.length === 0) {
-                                alert('入力欄が見つかりません');
-                                return;
-                            }
-                            
-                            // メニューを作成
-                            const menu = document.createElement('div');
-                            menu.id = 'field-selector-menu';
-                            menu.style.cssText = 'position:fixed;background:white;border:1px solid #ccc;border-radius:4px;box-shadow:0 4px 12px rgba(0,0,0,0.3);z-index:1000001;min-width:250px;max-height:400px;overflow-y:auto';
-                            menu.style.left = e.pageX + 'px';
-                            menu.style.top = e.pageY + 'px';
-                            
-                            // メニューヘッダー
-                            const header = document.createElement('div');
-                            header.textContent = '入力先を選択 (' + allInputs.length + '個のフィールド)';
-                            header.style.cssText = 'padding:10px;background:#2196F3;color:white;font-weight:bold;font-size:12px;border-radius:4px 4px 0 0';
-                            menu.appendChild(header);
-                            
-                            // 各入力欄をメニュー項目として追加
-                            allInputs.forEach(function(input, index) {
-                                const menuItem = document.createElement('div');
-                                
-                                // フィールドの説明を生成
-                                let label = '';
-                                if (input.placeholder) label = input.placeholder;
-                                else if (input.name) label = input.name;
-                                else if (input.id) label = input.id;
-                                else label = input.tagName.toLowerCase() + ' #' + (index + 1);
-                                
-                                // タイプ情報を追加
-                                const typeInfo = input.tagName === 'TEXTAREA' ? 'テキストエリア' : 
-                                               input.type ? input.type : 'text';
-                                
-                                menuItem.textContent = label + ' [' + typeInfo + ']';
-                                menuItem.style.cssText = 'padding:10px 15px;cursor:pointer;font-size:13px;color:#333;border-bottom:1px solid #eee;transition:background 0.2s';
-                                
-                                menuItem.onmouseover = function() { this.style.background = '#f5f5f5'; };
-                                menuItem.onmouseout = function() { this.style.background = 'white'; };
-                                
-                                menuItem.onclick = function(e) {
-                                    e.stopPropagation();
-                                    
-                                    // 値を入力
-                                    input.value = value;
-                                    input.focus();
-                                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                                    input.dispatchEvent(new Event('change', { bubbles: true }));
-                                    
-                                    // 入力欄をハイライト
-                                    const originalBorder = input.style.border;
-                                    input.style.border = '3px solid #4CAF50';
-                                    setTimeout(function() {
-                                        input.style.border = originalBorder;
-                                    }, 2000);
-                                    
-                                    // メニューを閉じる
-                                    menu.remove();
-                                };
-                                
-                                menu.appendChild(menuItem);
-                            });
-                            
-                            document.body.appendChild(menu);
-                            
-                            // 外側クリックでメニューを閉じる
-                            setTimeout(function() {
-                                document.addEventListener('click', function closeMenu() {
-                                    menu.remove();
-                                    document.removeEventListener('click', closeMenu);
-                                }, { once: true });
-                            }, 100);
                         };
                         
                         const label = document.createElement('div');
