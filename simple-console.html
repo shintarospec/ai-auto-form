@@ -421,10 +421,10 @@
                 </div>
                 <div class="panel-body vnc-body">
                     <div style="background: #e3f2fd; padding: 0.75rem; font-size: 0.75rem; border-bottom: 1px solid #90caf9;">
-                        <strong>💡 VNC修正方法（超シンプル）:</strong><br>
-                        <strong style="color: #1976d2;">① 最速：フィールド横の「VNCに送信」→ VNC内でCtrl+V</strong><br>
+                        <strong>💡 VNC修正方法（2通り）:</strong><br>
+                        <strong style="color: #1976d2;">① 簡単：「VNCに送信」ボタン → VNC左サイドバー📋 → テキスト確認 → フォームで右クリック→Paste</strong><br>
                         ② 確実：左のテキストを見ながら直接タイピング<br>
-                        ※ 🤖自動入力済み → 👁️確認 → ✏️修正（必要時のみ） → ✅送信
+                        <small style="color: #666;">※ 🤖自動入力済み → 👁️確認 → ✏️修正（必要時のみ） → ✅送信</small>
                     </div>
                     <iframe 
                         id="vnc-frame"
@@ -704,8 +704,27 @@
             const originalText = btn.textContent;
             
             try {
-                // ブラウザのClipboard APIでシステムクリップボードに書き込み
+                // 1. ブラウザのClipboard APIでシステムクリップボードに書き込み
                 await navigator.clipboard.writeText(text);
+                
+                // 2. noVNCのClipboardパネルに直接送信（iframe経由）
+                try {
+                    const vncFrame = document.getElementById('vnc-frame');
+                    const vncWindow = vncFrame.contentWindow;
+                    
+                    // noVNCのクリップボードテキストエリアに直接書き込み
+                    const clipboardTextarea = vncWindow.document.getElementById('noVNC_clipboard_text');
+                    if (clipboardTextarea) {
+                        clipboardTextarea.value = text;
+                        // Send Clipboardボタンをクリック
+                        const sendButton = vncWindow.document.getElementById('noVNC_clipboard_clear_button');
+                        if (sendButton && sendButton.previousElementSibling) {
+                            sendButton.previousElementSibling.click(); // Send Clipboardボタン
+                        }
+                    }
+                } catch (iframeError) {
+                    console.log('iframe access blocked (expected):', iframeError.message);
+                }
                 
                 // ボタンの見た目を一時的に変更
                 btn.textContent = '✓ コピー完了';
