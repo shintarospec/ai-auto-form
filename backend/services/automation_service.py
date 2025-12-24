@@ -95,6 +95,10 @@ class FormAutomationService:
         # ブラウザウィンドウをフルスクリーン表示（1920x1080）
         page = self.browser.new_page(viewport={'width': 1920, 'height': 1080})
         
+        # コンソールログをキャプチャ
+        page.on("console", lambda msg: print(f"🖥️  Browser console: {msg.type}: {msg.text}"))
+        page.on("pageerror", lambda exc: print(f"❌ Page error: {exc}"))
+        
         try:
             # ページを開く
             print(f"📄 フォームページを開いています: {form_url}")
@@ -103,12 +107,39 @@ class FormAutomationService:
             
             # ページにフォームデータパネルを埋め込む（カスタムコンテキストメニュー付き）
             print("📋 ページにフォームデータパネルを埋め込んでいます...")
-            import json
-            form_data_json = json.dumps(message_data, ensure_ascii=False)
             
-            page.evaluate("""
-                (function(dataJson) {
-                    window.formData = JSON.parse(dataJson);
+            try:
+                result = page.evaluate("""
+                    (formData) => {
+                        console.log('🔹 Starting data panel injection', formData);
+                        window.formData = formData;
+                        
+                        // テスト：パネルが既に存在するか確認
+                        if (document.getElementById('form-data-panel')) {
+                            console.log('⚠️  Panel already exists, removing...');
+                            document.getElementById('form-data-panel').remove();
+                        }
+                        if (document.getElementById('custom-context-menu')) {
+                            console.log('⚠️  Menu already exists, removing...');
+                            document.getElementById('custom-context-menu').remove();
+                        }
+                        
+                        return { success: true, dataKeys: Object.keys(formData) };
+                    }
+                """, message_data)
+                print(f"✅ 初期化成功: {result}")
+            except Exception as e:
+                print(f"❌ JavaScriptエラー（初期化）: {e}")
+                raise
+            
+            # メインのデータパネル＆メニュー埋め込み
+            print("📋 データパネルとカスタムメニューを作成中...")
+            
+            try:
+                result = page.evaluate("""
+                    (formData) => {
+                        console.log('🔹 Creating panel and menu with data:', formData);
+                    window.formData = formData;
                     
                     // データパネルを作成
                     const panel = document.createElement('div');
@@ -125,8 +156,7 @@ class FormAutomationService:
                         const value = window.formData[key];
                         const item = document.createElement('div');
                         item.className = 'data-item';
-                        item.style.cssText = 'margin:8px 0;padding:8px;background:rgba(255,255,255,0.15);border-radius:4px;cursor:pointer;transition:background 0.2s';
-                        item.setAttribute('data-value', value);
+                        item.style.cssText = 'margin:8px 0;padding:8px;background:rgba(255,255,255,0.15);border-radius:4px;cursor:pointer;transition:background 0.2s;user-select:none';
                         
                         item.onmouseover = function() { this.style.background = 'rgba(255,255,255,0.25)'; };
                         item.onmouseout = function() { this.style.background = 'rgba(255,255,255,0.15)'; };
@@ -200,9 +230,18 @@ class FormAutomationService:
                         menu.style.display = 'none';
                     });
                     
-                    console.log('✅ Data panel with custom context menu loaded');
-                })
-            """, form_data_json)
+                    console.log('✅ Data panel with custom context menu loaded', formData);
+                    return { 
+                        success: true, 
+                        panelExists: !!document.getElementById('form-data-panel'),
+                        menuExists: !!document.getElementById('custom-context-menu')
+                    };
+                }
+            """, message_data)
+                print(f"✅ データパネル＆メニュー作成成功: {result}")
+            except Exception as e:
+                print(f"❌ JavaScriptエラー（パネル作成）: {e}")
+                raise
             
             # フォームフィールドの検出と入力
             fields_filled = []
