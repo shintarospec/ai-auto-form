@@ -103,9 +103,11 @@ class FormAutomationService:
             
             # ページにフォームデータを埋め込む（VNC内でコピー可能に）
             print("📋 ページにフォームデータを埋め込んでいます...")
+            import json
+            form_data_json = json.dumps(message_data)
             page.evaluate(f"""
                 // フォームデータをページ内に保存
-                window.formData = {message_data};
+                window.formData = {form_data_json};
                 
                 // コピー用のUI要素を作成
                 const dataPanel = document.createElement('div');
@@ -122,28 +124,61 @@ class FormAutomationService:
                     font-size: 13px;
                     z-index: 999999;
                     max-width: 300px;
+                    max-height: 600px;
+                    overflow-y: auto;
                     box-shadow: 0 4px 12px rgba(0,0,0,0.3);
                 `;
                 
-                let html = '<strong>📋 フォームデータ（クリックでコピー）</strong><br><br>';
+                const title = document.createElement('strong');
+                title.textContent = '📋 フォームデータ（クリックでコピー）';
+                dataPanel.appendChild(title);
+                dataPanel.appendChild(document.createElement('br'));
+                dataPanel.appendChild(document.createElement('br'));
                 
-                const data = window.formData;
-                for (const [key, value] of Object.entries(data)) {{
+                // 各フィールドを動的に作成
+                for (const [key, value] of Object.entries(window.formData)) {{
+                    const fieldDiv = document.createElement('div');
+                    fieldDiv.style.cssText = `
+                        margin: 8px 0;
+                        cursor: pointer;
+                        padding: 5px;
+                        background: rgba(255,255,255,0.1);
+                        border-radius: 4px;
+                    `;
+                    
                     const cleanKey = key.replace(/_/g, ' ');
-                    html += `<div style="margin: 8px 0; cursor: pointer; padding: 5px; background: rgba(255,255,255,0.1); border-radius: 4px;" 
-                                  onclick="
-                                    navigator.clipboard.writeText('${{value}}').then(() => {{
-                                        this.style.background = 'rgba(76, 175, 80, 0.8)';
-                                        setTimeout(() => {{ this.style.background = 'rgba(255,255,255,0.1)'; }}, 1500);
-                                    }});
-                                  ">
-                        <strong>${{cleanKey}}:</strong><br>
-                        <span style="word-break: break-all;">${{value}}</span>
-                    </div>`;
+                    const label = document.createElement('strong');
+                    label.textContent = cleanKey + ':';
+                    fieldDiv.appendChild(label);
+                    fieldDiv.appendChild(document.createElement('br'));
+                    
+                    const valueSpan = document.createElement('span');
+                    valueSpan.style.wordBreak = 'break-all';
+                    valueSpan.textContent = String(value);
+                    fieldDiv.appendChild(valueSpan);
+                    
+                    // クリックイベント（クロージャで値を保持）
+                    fieldDiv.addEventListener('click', function() {{
+                        navigator.clipboard.writeText(String(value)).then(() => {{
+                            fieldDiv.style.background = 'rgba(76, 175, 80, 0.8)';
+                            setTimeout(() => {{
+                                fieldDiv.style.background = 'rgba(255,255,255,0.1)';
+                            }}, 1500);
+                        }}).catch(err => {{
+                            console.error('コピー失敗:', err);
+                        }});
+                    }});
+                    
+                    dataPanel.appendChild(fieldDiv);
                 }}
                 
-                html += '<br><small style="opacity: 0.8;">※ 各項目をクリックでコピー → フォームにCtrl+Vでペースト</small>';
-                dataPanel.innerHTML = html;
+                const note = document.createElement('small');
+                note.style.opacity = '0.8';
+                note.textContent = '※ 各項目をクリックでコピー → フォームにCtrl+Vでペースト';
+                dataPanel.appendChild(document.createElement('br'));
+                dataPanel.appendChild(document.createElement('br'));
+                dataPanel.appendChild(note);
+                
                 document.body.appendChild(dataPanel);
                 
                 // コンソールにも出力
