@@ -213,17 +213,28 @@ class FormAutomationService:
                     
                     document.body.appendChild(menu);
                     
-                    // 右クリックイベントをフォーム入力欄に設定
+                    // 右クリックイベントをフォーム入力欄に設定（キャプチャフェーズで早期に捕捉）
                     document.addEventListener('contextmenu', function(e) {
                         const target = e.target;
+                        console.log('🖱️ Right-click detected on:', target.tagName, target.type);
+                        
                         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+                            console.log('✅ Preventing default menu, showing custom menu');
                             e.preventDefault();
+                            e.stopPropagation();
+                            e.stopImmediatePropagation();
+                            
                             menu.targetElement = target;
-                            menu.style.left = e.pageX + 'px';
-                            menu.style.top = e.pageY + 'px';
+                            
+                            // ページ座標を使用（VNC環境での安定性向上）
+                            const rect = target.getBoundingClientRect();
+                            menu.style.left = (rect.left + window.scrollX) + 'px';
+                            menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
                             menu.style.display = 'block';
+                            
+                            return false;
                         }
-                    });
+                    }, true);  // キャプチャフェーズで実行
                     
                     // メニューを閉じる
                     document.addEventListener('click', function() {
