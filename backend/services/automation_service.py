@@ -101,8 +101,108 @@ class FormAutomationService:
             page.goto(form_url, wait_until='networkidle', timeout=30000)
             time.sleep(2)
             
-            # データパネルは一旦無効化（v連打問題のため）
-            # 代わりに左パネルの「VNCに送信」ボタンを使用してください
+            # ページにフォームデータパネルを埋め込む（カスタムコンテキストメニュー付き）
+            print("📋 ページにフォームデータパネルを埋め込んでいます...")
+            import json
+            form_data_json = json.dumps(message_data, ensure_ascii=False)
+            
+            page.evaluate("""
+                (function(dataJson) {
+                    window.formData = JSON.parse(dataJson);
+                    
+                    // データパネルを作成
+                    const panel = document.createElement('div');
+                    panel.id = 'form-data-panel';
+                    panel.style.cssText = 'position:fixed;top:10px;right:10px;background:rgba(33,150,243,0.95);color:white;padding:15px;border-radius:8px;font-family:sans-serif;font-size:13px;z-index:999999;max-width:300px;max-height:600px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.3)';
+                    
+                    const title = document.createElement('div');
+                    title.textContent = '📋 フォームデータ';
+                    title.style.cssText = 'font-weight:bold;margin-bottom:10px;font-size:14px';
+                    panel.appendChild(title);
+                    
+                    // 各データフィールド
+                    Object.keys(window.formData).forEach(function(key) {
+                        const value = window.formData[key];
+                        const item = document.createElement('div');
+                        item.className = 'data-item';
+                        item.style.cssText = 'margin:8px 0;padding:8px;background:rgba(255,255,255,0.15);border-radius:4px;cursor:pointer;transition:background 0.2s';
+                        item.setAttribute('data-value', value);
+                        
+                        item.onmouseover = function() { this.style.background = 'rgba(255,255,255,0.25)'; };
+                        item.onmouseout = function() { this.style.background = 'rgba(255,255,255,0.15)'; };
+                        item.onclick = function() {
+                            navigator.clipboard.writeText(value);
+                            this.style.background = 'rgba(76,175,80,0.8)';
+                            const self = this;
+                            setTimeout(function() { self.style.background = 'rgba(255,255,255,0.15)'; }, 1000);
+                        };
+                        
+                        const label = document.createElement('div');
+                        label.textContent = key.replace(/_/g, ' ');
+                        label.style.cssText = 'font-size:11px;opacity:0.8;margin-bottom:4px';
+                        item.appendChild(label);
+                        
+                        const val = document.createElement('div');
+                        val.textContent = String(value);
+                        val.style.cssText = 'word-break:break-all;font-size:12px';
+                        item.appendChild(val);
+                        
+                        panel.appendChild(item);
+                    });
+                    
+                    const note = document.createElement('div');
+                    note.textContent = '💡 クリックでコピー → 右クリックでペースト';
+                    note.style.cssText = 'margin-top:10px;font-size:11px;opacity:0.7;text-align:center';
+                    panel.appendChild(note);
+                    
+                    document.body.appendChild(panel);
+                    
+                    // カスタム右クリックメニューを作成
+                    const menu = document.createElement('div');
+                    menu.id = 'custom-context-menu';
+                    menu.style.cssText = 'display:none;position:fixed;background:white;border:1px solid #ccc;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.15);z-index:1000000;min-width:200px';
+                    
+                    Object.keys(window.formData).forEach(function(key) {
+                        const value = window.formData[key];
+                        const menuItem = document.createElement('div');
+                        menuItem.textContent = key.replace(/_/g, ' ') + ': ' + String(value).substring(0, 30) + '...';
+                        menuItem.style.cssText = 'padding:8px 12px;cursor:pointer;font-size:13px;color:#333;border-bottom:1px solid #eee';
+                        menuItem.onmouseover = function() { this.style.background = '#f0f0f0'; };
+                        menuItem.onmouseout = function() { this.style.background = 'white'; };
+                        menuItem.onclick = function(e) {
+                            e.stopPropagation();
+                            const target = menu.targetElement;
+                            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+                                target.value = value;
+                                target.dispatchEvent(new Event('input', { bubbles: true }));
+                            }
+                            menu.style.display = 'none';
+                        };
+                        menu.appendChild(menuItem);
+                    });
+                    
+                    document.body.appendChild(menu);
+                    
+                    // 右クリックイベントをフォーム入力欄に設定
+                    document.addEventListener('contextmenu', function(e) {
+                        const target = e.target;
+                        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+                            e.preventDefault();
+                            menu.targetElement = target;
+                            menu.style.left = e.pageX + 'px';
+                            menu.style.top = e.pageY + 'px';
+                            menu.style.display = 'block';
+                        }
+                    });
+                    
+                    // メニューを閉じる
+                    document.addEventListener('click', function() {
+                        menu.style.display = 'none';
+                    });
+                    
+                    console.log('✅ Data panel with custom context menu loaded');
+                })
+            """, form_data_json)
             
             # フォームフィールドの検出と入力
             fields_filled = []
