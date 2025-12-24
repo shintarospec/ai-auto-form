@@ -213,7 +213,50 @@ class FormAutomationService:
                     
                     document.body.appendChild(menu);
                     
-                    // 右クリックイベントをフォーム入力欄に設定（キャプチャフェーズで早期に捕捉）
+                    // 各入力欄に小さなボタンを追加
+                    const inputs = document.querySelectorAll('input[type="text"], input[type="email"], input[type="tel"], textarea');
+                    console.log('📝 Found ' + inputs.length + ' input fields');
+                    
+                    inputs.forEach(function(input) {
+                        // ボタンを作成
+                        const btn = document.createElement('button');
+                        btn.textContent = '📋';
+                        btn.type = 'button';
+                        btn.style.cssText = 'position:absolute;margin-left:5px;padding:4px 8px;background:#2196F3;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px;z-index:1000';
+                        btn.title = 'データから入力';
+                        
+                        btn.onmouseover = function() { this.style.background = '#1976D2'; };
+                        btn.onmouseout = function() { this.style.background = '#2196F3'; };
+                        
+                        btn.onclick = function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('📋 Button clicked for:', input.name || input.id);
+                            
+                            menu.targetElement = input;
+                            
+                            // ボタンの位置を基準にメニューを表示
+                            const rect = btn.getBoundingClientRect();
+                            menu.style.left = (rect.left + window.scrollX) + 'px';
+                            menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+                            menu.style.display = 'block';
+                        };
+                        
+                        // 入力欄の親要素の位置を確認
+                        const parent = input.parentElement;
+                        if (parent && window.getComputedStyle(parent).position === 'static') {
+                            parent.style.position = 'relative';
+                        }
+                        
+                        // ボタンを入力欄の後に挿入
+                        if (input.nextSibling) {
+                            input.parentNode.insertBefore(btn, input.nextSibling);
+                        } else {
+                            input.parentNode.appendChild(btn);
+                        }
+                    });
+                    
+                    // 右クリックも残しておく（念のため）
                     document.addEventListener('contextmenu', function(e) {
                         const target = e.target;
                         console.log('🖱️ Right-click detected on:', target.tagName, target.type);
@@ -226,7 +269,6 @@ class FormAutomationService:
                             
                             menu.targetElement = target;
                             
-                            // ページ座標を使用（VNC環境での安定性向上）
                             const rect = target.getBoundingClientRect();
                             menu.style.left = (rect.left + window.scrollX) + 'px';
                             menu.style.top = (rect.bottom + window.scrollY + 5) + 'px';
@@ -234,11 +276,13 @@ class FormAutomationService:
                             
                             return false;
                         }
-                    }, true);  // キャプチャフェーズで実行
+                    }, true);
                     
                     // メニューを閉じる
-                    document.addEventListener('click', function() {
-                        menu.style.display = 'none';
+                    document.addEventListener('click', function(e) {
+                        if (!menu.contains(e.target)) {
+                            menu.style.display = 'none';
+                        }
                     });
                     
                     console.log('✅ Data panel with custom context menu loaded', formData);
