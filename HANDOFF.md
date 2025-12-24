@@ -1,7 +1,25 @@
 # AI AutoForm - 新チャット引き継ぎ文書 📋
 
-**最終更新**: 2025年12月21日  
-**プロジェクト状態**: Phase 1 MVP完成、VPS移行準備中
+**最終更新**: 2025年12月25日  
+**プロジェクト状態**: Phase 2-3 VNC統合完成、自動ペースト機能実装済み
+
+---
+
+## 🎯 最新の完成機能（2025-12-25）
+
+### ✅ VNC自動ペースト機能
+- **xdotool + xsel**: VNC内のフォーカス中フィールドに自動入力
+- **ワンクリック操作**: 「⚡ 自動ペースト」ボタンで完結
+- **UI簡略化**: VNCコピーボタンと青パネル削除
+
+### ✅ タスク管理機能
+- **リセット機能**: 全タスクを未処理に一括リセット
+- **手動リフレッシュ**: タスクリストを即座に更新
+- **自動更新**: 3秒ごとのステータス自動更新
+
+### ✅ 誤操作防止
+- **Enterキー防止**: input要素でのEnter送信を自動ブロック
+- **textarea除外**: メッセージ欄では改行可能
 
 ---
 
@@ -33,42 +51,148 @@
   ```
 
 ### 2. API層（動作中✅）
-- **Flask 3.0.0**: ポート5001で稼働中
-- **起動コマンド**:
-  ```bash
-  cd /workspaces/ai-auto-form
-  lsof -ti:5001 | xargs kill -9 2>/dev/null
-  FLASK_APP=backend.app FLASK_ENV=development python -m flask run --host=0.0.0.0 --port=5001
-  ```
-- **4つのエンドポイント**:
+- **Flask 3.0.0**: VPSポート5001で稼働中
+- **VPS起動**: `bash restart-flask-vps.sh` または `bash start-flask.sh`
+- **新規APIエンドポイント**:
+  - `POST /api/simple/vnc/send-data` - VNCクリップボードに送信
+  - `POST /api/simple/vnc/auto-paste` - 自動ペースト実行
+  - `POST /api/simple/tasks/reset` - 全タスクリセット
+- **既存エンドポイント**:
   - `GET /api/simple/tasks` - タスク一覧
   - `GET /api/simple/tasks/<id>` - タスク詳細
   - `POST /api/simple/tasks/<id>/execute` - 自動入力実行
   - `POST /api/simple/tasks/<id>/complete` - 完了マーク
-- **動作確認**:
-  ```bash
-  curl http://localhost:5001/api/simple/tasks
-  ```
 
 ### 3. フロントエンド層（動作中✅）
-- **Simple Console**: `simple-console.html`（Phase 1専用UI）
-- **起動中のHTTPサーバー**: ポート8000
-  ```bash
-  cd /workspaces/ai-auto-form
-  lsof -ti:8000 | xargs kill -9 2>/dev/null
-  nohup python -m http.server 8000 > http-server.log 2>&1 &
-  ```
-- **アクセス**: Codespacesのポート8000を「Public」に設定後、`simple-console.html`を開く
-- **機能**: 統計情報、タスク一覧、詳細表示、自動入力実行、完了マーク
+- **Simple Console**: `simple-console.html`（VPS上で動作）
+- **アクセス**: `http://153.126.154.158:8000/simple-console.html`
+- **HTTPサーバー**: VPSポート8000
+- **新機能**:
+  - ⚡ 自動ペーストボタン（各フィールド）
+  - 🔄 全タスクリセットボタン（ヘッダー）
+  - 🔄 更新ボタン（ヘッダー）
+  - 読みやすいフォームデータ表示
+- **旧機能削除**:
+  - ❌ VNCコピーボタン削除
+  - ❌ 青パネル削除
 
-### 4. Playwright層（動作中✅）
-- **ファイル**: `backend/services/automation_service.py`
-- **現在の設定**: `headless=True`（画面非表示モード）
-- **動作確認済み**: test-contact-form.htmlに自動入力、スクリーンショット保存
+### 4. Playwright + VNC層（動作中✅）
+- **VNC環境**: Xvfb :99 + x11vnc + noVNC
+- **VNC起動**: `bash start-vnc.sh`
+- **noVNCアクセス**: `http://153.126.154.158:6080/vnc.html`
+- **自動ペースト**: xdotool + xsel
+- **誤送信防止**: Enterキー自動ブロック
+- **設定**: `headless=False, DISPLAY=:99`
+
+### 5. VPS環境（稼働中✅）
+- **VPSアドレス**: 153.126.154.158
+- **ユーザー**: `ubuntu@` （root@ではない）
+- **プロジェクトパス**: `/opt/ai-auto-form`
+- **必須ツール**: xsel, xdotool（インストール済み）
+- **Flask再起動**: `bash restart-flask-vps.sh`
 
 ---
 
-## 🔄 環境の起動手順
+## 🔧 Flask再起動の確実な手順
+
+**問題**: コード変更後にFlaskを再起動しても、Pythonキャッシュやインポート済みモジュールにより変更が反映されないことがある
+
+**解決策**: 以下の確実な手順を必ず実行
+
+```bash
+# 1. コード編集（ローカル）
+# automation_service.py等を編集
+
+# 2. VPSに転送
+scp backend/services/automation_service.py ubuntu@153.126.154.158:/opt/ai-auto-form/backend/services/
+
+# 3. Flask再起動（確実な方法）
+bash restart-flask-vps.sh
+
+# または手動の場合：
+ssh ubuntu@153.126.154.158 '
+  pkill -9 -f "python.*app.py"
+  cd /opt/ai-auto-form
+  find . -name "*.pyc" -delete
+  find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+  bash start-flask.sh
+'
+
+# 4. タスク実行して検証
+# simple-console.htmlからタスク実行
+# VNC画面で変更が反映されているか確認
+```
+
+---
+
+## 🔄 環境の起動手順（VPS）
+
+### VNCサーバー起動:
+```bash
+ssh ubuntu@153.126.154.158
+cd /opt/ai-auto-form
+bash start-vnc.sh
+```
+
+### Flaskサーバー起動:
+```bash
+ssh ubuntu@153.126.154.158
+cd /opt/ai-auto-form
+bash start-flask.sh
+```
+
+### アクセス:
+- **simple-console**: http://153.126.154.158:8000/simple-console.html
+- **noVNC**: http://153.126.154.158:6080/vnc.html
+
+---
+
+## 🎨 自動ペースト機能の使い方
+
+### 基本フロー
+1. **タスク実行**: 「▶ 自動入力＋送信」ボタンをクリック
+2. **VNC画面確認**: フォームが自動入力される
+3. **フィールド選択**: VNC画面で修正したいフィールドをクリック
+4. **自動ペースト**: コンソール画面で「⚡ 自動ペースト」ボタンをクリック
+5. **自動入力完了**: VNC画面のフォーカス中フィールドに自動入力される
+
+### 技術仕様
+- **xsel**: VNCクリップボードへの書き込み（DISPLAY=:99）
+- **xdotool**: Ctrl+Vキーストロークの自動送信
+- **イベント駆動**: ボタンクリックでAPI呼び出し → バックエンドで実行
+
+### トラブルシューティング
+- **ペーストされない**: VNC画面でフィールドをクリックしてフォーカスを確認
+- **エラー表示**: xsel/xdotoolがインストールされているか確認
+  ```bash
+  ssh ubuntu@153.126.154.158 'which xsel && which xdotool'
+  ```
+
+---
+
+## 📝 次のセッションへの引き継ぎ事項
+
+### 完了した作業（2025-12-25）
+- ✅ VNC自動ペースト機能実装
+- ✅ UI簡略化（VNCコピー・青パネル削除）
+- ✅ タスクリセット機能
+- ✅ 手動リフレッシュ機能
+- ✅ Enterキー誤送信防止
+- ✅ Flask再起動手順確立
+
+### 次の作業（UIデザイン調整）
+- 🎨 UIデザイン調整に着手予定
+- 配色、レイアウト、フォント等の改善
+- ユーザビリティ向上
+
+### 重要な注意事項
+- **Flask再起動**: 必ず`restart-flask-vps.sh`を使用
+- **VPS接続**: `ubuntu@153.126.154.158`（root@ではない）
+- **MVP戦略厳守**: 既存動作コードを壊さない
+
+---
+
+## 🔄 環境の起動手順（旧：ローカル開発用）
 
 ### 1回目（コンテナ起動）:
 ```bash
