@@ -262,6 +262,10 @@ CREATE TABLE simple_products (
     name VARCHAR(200) NOT NULL,
     description TEXT,
     message_template TEXT,
+    sender_name VARCHAR(100),      -- 送信者名（案件ごとに設定）
+    sender_email VARCHAR(200),     -- 送信者メール（案件ごとに設定）
+    sender_company VARCHAR(200),   -- 送信者会社名（案件ごとに設定）
+    sender_phone VARCHAR(50),      -- 送信者電話番号（案件ごとに設定）
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -519,11 +523,75 @@ CREATE TABLE tasks (
 - [ ] バッチ処理機能
 - [ ] ワーカーコンソールUI
 
-### Phase 3（2-3日）
-- [ ] Gemini API統合
-- [ ] フォーム自動解析
-- [ ] 学習機能
-- [ ] レポート機能
+### Phase 2-A（完了）
+- ✅ タスク生成システム（企業×案件の組み合わせ）
+- ✅ AI文面カスタマイズ基礎実装
+- ✅ 管理コンソールUI（タブ式）
+- ✅ 案件・企業・タスク管理機能
+- ✅ Gemini API統合（gemini-2.5-flash）
+
+### Phase 3（AI強化・フォーム拡張）
+**AI文面カスタマイズのブラッシュアップ**
+
+#### ① 企業DB強化（DeepBiz連携）
+- [ ] DeepBizスクレイピングデータの自動取り込み
+- [ ] AI要約機能（企業概要→課題・強み抽出）
+- [ ] 企業DBカラム拡張:
+  - `pain_points`（抱えている課題）
+  - `achievements`（実績・強み）
+  - `target_market`（ターゲット市場）
+  - `company_size_category`（企業規模カテゴリ）
+
+#### ② 案件DB強化（テンプレート品質向上）
+- [ ] AI による message_template 自動生成・改善
+- [ ] A/Bテスト機能（複数テンプレート比較）
+- [ ] 業界別テンプレートライブラリ
+- [ ] フォーム項目拡張対応:
+  ```json
+  {
+    "lastname": "姓",
+    "firstname": "名", 
+    "lastname_kana": "姓（フリガナ）",
+    "firstname_kana": "名（フリガナ）",
+    "representative_title": "代表者職位",
+    "representative_lastname": "代表者姓",
+    "representative_firstname": "代表者名",
+    "department": "部署名",
+    "position": "役職名",
+    "employee_count": "従業員数",
+    "prefecture": "都道府県",
+    "city": "市区町村",
+    "address_line1": "番地",
+    "building": "建物名",
+    "phone_fixed": "固定電話",
+    "phone_mobile": "携帯電話",
+    "fax": "FAX",
+    "website_url": "会社URL"
+  }
+  ```
+
+#### ③ タスクDB・AI生成強化
+- [ ] Few-shot学習によるプロンプト改善
+- [ ] 企業の課題に基づく提案内容カスタマイズ
+- [ ] 業界特有用語の自動挿入
+- [ ] 生成品質スコアリング機能
+
+#### ④ フォーム自動入力の高度化
+**アプローチA: ルールベース（MVP）**
+- [ ] フィールド名マッチング辞書の拡充
+- [ ] 正規表現による柔軟なマッチング
+- [ ] 優先順位付きマッチングロジック
+
+**アプローチB: AI活用（将来）**
+- [ ] Playwrightによるフォーム構造自動解析
+- [ ] Gemini APIでフィールド名の意味推論
+- [ ] 動的マッピング生成（未知のフォームに対応）
+- [ ] セレクタ学習機能（成功パターンの蓄積）
+
+#### その他Phase 3機能
+- [ ] レポート機能（送信成功率・AI品質スコア）
+- [ ] ワーカーパフォーマンス分析
+- [ ] バッチ処理スケジューラ
 
 ---
 
@@ -576,3 +644,167 @@ CREATE TABLE tasks (
 **作成日**: 2025年12月21日  
 **バージョン**: 1.0  
 **ステータス**: Phase 1 完了、Phase 2 準備中
+
+---
+
+## 🤖 AI活用戦略：4つの場面
+
+本システムでは、以下の4つの場面でAIを活用し、段階的に自動化レベルを向上させます。
+
+### ① 企業DB：スクレイピングデータのAI要約
+
+**目的**: DeepBizから取得した生データを構造化・要約
+
+**フロー**:
+```
+DeepBiz → スクレイピング → 生HTML/テキスト → Gemini API → 構造化データ
+```
+
+**AI処理内容**:
+- 企業概要から「強み」「実績」「課題」を抽出
+- 業界カテゴリの自動分類
+- 決裁者情報の抽出
+
+**実装**: DeepBiz側で対応（Phase 3）
+
+---
+
+### ② 案件DB：テンプレート品質向上
+
+**目的**: 営業メッセージテンプレートをAIで生成・改善
+
+**AI処理内容**:
+- ペルソナ設定に基づくトーン調整
+- 業界ごとの最適化
+- A/Bテスト用の複数バリエーション生成
+
+**実装**: Phase 3で対応
+
+---
+
+### ③ タスクDB：企業別メッセージカスタマイズ
+
+**目的**: テンプレート × 企業情報 → パーソナライズされた営業文
+
+**AI処理内容**（Phase 2-A完了 ✅）:
+- プレースホルダー（【業界】【企業特徴】）の置き換え
+- 企業の課題に基づく提案内容のカスタマイズ
+- 文字数調整（テンプレート長±50文字）
+- **実装ファイル**: `backend/services/gemini_service.py`
+- **使用UI**: `simple-console-v2.html`（メインUI）
+- **管理UI**: `admin-phase2a.html`（タスク生成・再生成）
+
+**Phase 3改善**:
+- Few-shot学習によるプロンプト改善
+- 企業規模・業界に応じたトーン調整
+- 数値実績の動的挿入
+
+---
+
+### ④ フォーム自動入力：多様なフォーム項目への対応
+
+**課題**: 
+- フォーム項目名のバリエーション（「お名前」「氏名」「Name」）
+- 項目の有無（「FAX」がある/ない）
+- 入力形式の違い（1行/2行、プルダウン/テキスト）
+
+#### アプローチA: ルールベースマッピング（Phase 3推奨）
+
+**メリット**: 高速・確実・デバッグ容易  
+**デメリット**: 辞書に無い表現に対応不可
+
+**実装イメージ**:
+```python
+FIELD_MAPPING = {
+    'lastname': ['お名前（姓）', '姓', '苗字', 'Last Name'],
+    'firstname': ['お名前（名）', '名', 'First Name'],
+    'company': ['会社名', '企業名', 'Company'],
+    'phone_fixed': ['電話番号', '固定電話', 'Tel'],
+    'email': ['メールアドレス', 'Email', 'mail'],
+    # ... 20項目程度定義
+}
+```
+
+#### アプローチB: AI活用（Phase 4研究開発）
+
+**メリット**: 柔軟・未知のフォームにも対応  
+**デメリット**: APIコスト・レイテンシ
+
+**実装イメージ**:
+```python
+# Playwrightでフォーム構造スキャン → Gemini APIで意味推論 → 動的マッピング生成
+```
+
+
+---
+
+## 📋 Phase 3: フォーム項目拡張の詳細
+
+### 対応すべきフォーム項目（20項目）
+
+| カテゴリ | 項目 | データキー | 優先度 |
+|---------|-----|-----------|--------|
+| **個人情報** | お名前（姓） | `lastname` | 高 |
+| | お名前（名） | `firstname` | 高 |
+| | フリガナ（姓） | `lastname_kana` | 中 |
+| | フリガナ（名） | `firstname_kana` | 中 |
+| **会社情報** | 会社名 | `company` | 高 |
+| | 代表者職位 | `representative_title` | 中 |
+| | 従業員数 | `employee_count` | 中 |
+| **連絡先** | 電話番号（固定） | `phone_fixed` | 高 |
+| | 電話番号（携帯） | `phone_mobile` | 中 |
+| | FAX | `fax` | 低 |
+| | メールアドレス | `email` | 高 |
+| **組織情報** | 部署名 | `department` | 中 |
+| | 役職名 | `position` | 中 |
+| **所在地** | 都道府県 | `prefecture` | 中 |
+| | 市区町村 | `city` | 中 |
+| | 番地 | `address_line1` | 中 |
+| | 建物名 | `building` | 低 |
+| **その他** | 会社URL | `website_url` | 中 |
+| | お問い合わせ内容 | `inquiry_message` | 高 |
+
+### 案件DBの拡張（form_fields_template追加）
+
+```json
+{
+  "basic": {
+    "lastname": "山田",
+    "firstname": "太郎",
+    "lastname_kana": "ヤマダ",
+    "firstname_kana": "タロウ"
+  },
+  "contact": {
+    "email": "sales@example.com",
+    "phone_fixed": "03-1234-5678",
+    "phone_mobile": "090-1234-5678",
+    "fax": "03-1234-5679"
+  },
+  "company": {
+    "name": "株式会社テスト",
+    "representative_title": "代表取締役",
+    "department": "営業部",
+    "position": "部長",
+    "employee_count": "50"
+  },
+  "address": {
+    "prefecture": "東京都",
+    "city": "港区",
+    "address_line1": "六本木1-2-3",
+    "building": "六本木タワー8階",
+    "website_url": "https://example.com"
+  }
+}
+```
+
+---
+
+## 🎯 Phase別AI活用ロードマップ
+
+| Phase | ① 企業DB | ② 案件DB | ③ タスクDB | ④ フォーム入力 |
+|-------|---------|---------|-----------|---------------|
+| **Phase 2-A** | DeepBiz側 | 手動作成 | ✅ AI生成 | 固定5項目 |
+| **Phase 3前半** | ✅ AI要約 | ✅ AI生成 | Few-shot改善 | ルールベース20項目 |
+| **Phase 3後半** | データ蓄積 | A/Bテスト | 品質スコア | 完全対応 |
+| **Phase 4** | 自動更新 | 自動最適化 | 自動改善 | AI動的マッピング |
+

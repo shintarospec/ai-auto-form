@@ -66,6 +66,7 @@ ssh root@153.126.154.158  # 使用禁止
 - テーブル: `simple_companies`, `simple_products`, `simple_tasks`
 - **既存テーブル構造を変更しない**
 - SQLAlchemyで統一（新しいORMライブラリ導入禁止）
+- **送信者情報**: `simple_products`に案件ごとの送信者情報を格納（sender_name, sender_email, sender_company, sender_phone）
 
 ## 禁止事項（MVP戦略遵守のため）
 

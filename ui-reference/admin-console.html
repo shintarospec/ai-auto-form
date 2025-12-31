@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Console - AI AutoForm (API版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        .pulse-ring {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #6366f1;
+            border-radius: 50%;
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.33); opacity: 1; }
+            80%, 100% { transform: scale(2); opacity: 0; }
+        }
+        .view-section { display: none; }
+        .view-section.active { display: block; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 h-screen flex overflow-hidden">
+
+    <!-- Admin Sidebar -->
+    <aside class="w-64 bg-slate-950 border-r border-slate-800 flex flex-col z-20">
+        <div class="h-16 flex items-center px-6 border-b border-slate-800">
+            <i class="fa-solid fa-layer-group text-indigo-500 text-xl mr-3"></i>
+            <span class="font-bold text-lg text-white tracking-wide">Admin Console</span>
+        </div>
+        
+        <!-- API Status Indicator -->
+        <div id="api-status" class="mx-3 mt-3 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700">
+            <div class="flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
+                <span class="text-xs text-slate-400">API接続中...</span>
+            </div>
+        </div>
+
+        <nav class="flex-1 py-6 space-y-1 px-3">
+            <p class="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Management</p>
+            
+            <button onclick="switchView('overview')" id="nav-overview" class="nav-btn w-full flex items-center px-4 py-3 rounded-lg bg-indigo-600 text-white shadow-lg shadow-indigo-900/50 transition-all">
+                <i class="fa-solid fa-chart-line w-6"></i>
+                <span class="font-medium">全体サマリー</span>
+            </button>
+            
+            <button onclick="switchView('projects')" id="nav-projects" class="nav-btn w-full flex items-center px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <i class="fa-solid fa-diagram-project w-6"></i>
+                <span class="font-medium">プロジェクト管理</span>
+            </button>
+
+            <p class="px-3 text-xs font-bold text-slate-500 uppercase tracking-wider mt-6 mb-2">Databases</p>
+            
+            <button onclick="switchView('db-company')" id="nav-db-company" class="nav-btn w-full flex items-center px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <i class="fa-solid fa-building w-6"></i>
+                <span class="font-medium">企業リストDB</span>
+            </button>
+            
+            <button onclick="switchView('db-product')" id="nav-db-product" class="nav-btn w-full flex items-center px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <i class="fa-solid fa-briefcase w-6"></i>
+                <span class="font-medium">案件・商材DB</span>
+            </button>
+
+            <button onclick="switchView('db-worker')" id="nav-db-worker" class="nav-btn w-full flex items-center px-4 py-3 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
+                <i class="fa-solid fa-users w-6"></i>
+                <span class="font-medium">作業者DB</span>
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-slate-800 text-xs text-slate-500 text-center">
+            v3.0.0 (API統合版)
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col relative overflow-hidden bg-slate-900">
+        
+        <!-- Header -->
+        <header class="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-8 z-10">
+            <h2 id="page-title" class="text-xl font-bold text-white">全体サマリー</h2>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-800 rounded-full border border-slate-700">
+                    <div id="system-status-dot" class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <span id="system-status-text" class="text-xs font-medium text-slate-300">System Healthy</span>
+                </div>
+                <button onclick="refreshCurrentView()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-400 transition">
+                    <i class="fa-solid fa-rotate"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- VIEW 1: Overview Dashboard -->
+        <div id="view-overview" class="view-section active flex-1 overflow-y-auto p-8">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-4 gap-6 mb-8">
+                <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-2">総タスク数</p>
+                    <div class="flex items-end gap-3">
+                        <span class="text-3xl font-bold text-white" id="overview-total-tasks">0</span>
+                    </div>
+                </div>
+                <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-2">完了タスク</p>
+                    <div class="flex items-end gap-3">
+                        <span class="text-3xl font-bold text-green-400" id="overview-completed-tasks">0</span>
+                    </div>
+                </div>
+                <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-2">アクティブプロジェクト</p>
+                    <div class="flex items-end gap-3">
+                        <span class="text-3xl font-bold text-indigo-400" id="overview-active-projects">0</span>
+                    </div>
+                </div>
+                <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                    <p class="text-slate-400 text-xs font-bold uppercase mb-2">登録作業者</p>
+                    <div class="flex items-end gap-3">
+                        <span class="text-3xl font-bold text-yellow-400" id="overview-total-workers">0</span>
+                        <span class="text-sm text-slate-500 mb-1">名</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Projects & Workers -->
+            <div class="grid grid-cols-2 gap-6">
+                <!-- Recent Projects -->
+                <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                    <h3 class="font-bold text-slate-200 mb-4">最近のプロジェクト</h3>
+                    <div id="recent-projects" class="space-y-3">
+                        <p class="text-slate-500 text-sm">読み込み中...</p>
+                    </div>
+                </div>
+
+                <!-- Top Workers -->
+                <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+                    <h3 class="font-bold text-slate-200 mb-4">ポイントランキング</h3>
+                    <div id="top-workers" class="space-y-3">
+                        <p class="text-slate-500 text-sm">読み込み中...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 2: Projects Management -->
+        <div id="view-projects" class="view-section flex-1 overflow-y-auto p-8">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-white">プロジェクト管理</h3>
+                <button onclick="showCreateProjectModal()" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition shadow-lg shadow-indigo-900/50">
+                    <i class="fa-solid fa-plus mr-2"></i>新規プロジェクト作成
+                </button>
+            </div>
+
+            <div id="projects-list" class="space-y-4">
+                <p class="text-slate-500">読み込み中...</p>
+            </div>
+        </div>
+
+        <!-- VIEW 3: Company Database -->
+        <div id="view-db-company" class="view-section flex-1 overflow-y-auto p-8">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-white">企業リストDB</h3>
+                <button onclick="showCreateTargetListModal()" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition">
+                    <i class="fa-solid fa-plus mr-2"></i>新規リスト作成
+                </button>
+            </div>
+
+            <div id="target-lists" class="space-y-4">
+                <p class="text-slate-500">読み込み中...</p>
+            </div>
+        </div>
+
+        <!-- VIEW 4: Product Database -->
+        <div id="view-db-product" class="view-section flex-1 overflow-y-auto p-8">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-white">案件・商材DB</h3>
+                <button onclick="showCreateProductModal()" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition">
+                    <i class="fa-solid fa-plus mr-2"></i>新規商材登録
+                </button>
+            </div>
+
+            <div id="products-list" class="space-y-4">
+                <p class="text-slate-500">読み込み中...</p>
+            </div>
+        </div>
+
+        <!-- VIEW 5: Worker Database -->
+        <div id="view-db-worker" class="view-section flex-1 overflow-y-auto p-8">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-white">作業者DB</h3>
+                <button onclick="showCreateWorkerModal()" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition">
+                    <i class="fa-solid fa-plus mr-2"></i>新規作業者登録
+                </button>
+            </div>
+
+            <div id="workers-list" class="space-y-4">
+                <p class="text-slate-500">読み込み中...</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Create Project Modal -->
+    <div id="create-project-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-slate-800 rounded-2xl p-8 w-full max-w-2xl border border-slate-700">
+            <h3 class="text-2xl font-bold text-white mb-6">新規プロジェクト作成</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">プロジェクト名</label>
+                    <input id="project-name" type="text" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-indigo-500 focus:outline-none" placeholder="例: IT企業向けAIチャットボット営業">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">ターゲットリスト</label>
+                    <select id="project-target-list" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-indigo-500 focus:outline-none">
+                        <option value="">選択してください</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">商材</label>
+                    <select id="project-product" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-indigo-500 focus:outline-none">
+                        <option value="">選択してください</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">担当作業者を選択 (複数選択可)</label>
+                    <div id="project-workers" class="max-h-48 overflow-y-auto bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-2">
+                        <!-- Worker checkboxes will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex gap-4 mt-8">
+                <button onclick="closeCreateProjectModal()" class="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition">
+                    キャンセル
+                </button>
+                <button onclick="createProject()" class="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition">
+                    作成
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Target List Modal -->
+    <div id="create-target-list-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-slate-800 rounded-2xl p-8 w-full max-w-2xl border border-slate-700">
+            <h3 class="text-2xl font-bold text-white mb-6">新規ターゲットリスト作成</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">リスト名</label>
+                    <input id="target-list-name" type="text" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-indigo-500 focus:outline-none" placeholder="例: 東京IT企業リスト">
+                </div>
+            </div>
+
+            <div class="flex gap-4 mt-8">
+                <button onclick="closeCreateTargetListModal()" class="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition">
+                    キャンセル
+                </button>
+                <button onclick="createTargetList()" class="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition">
+                    作成
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Product Modal -->
+    <div id="create-product-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-slate-800 rounded-2xl p-8 w-full max-w-2xl border border-slate-700">
+            <h3 class="text-2xl font-bold text-white mb-6">新規商材登録</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">商材名</label>
+                    <input id="product-name" type="text" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-indigo-500 focus:outline-none" placeholder="例: AIチャットボット導入">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">価格 (円)</label>
+                    <input id="product-price" type="number" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-indigo-500 focus:outline-none" placeholder="500000">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">説明</label>
+                    <textarea id="product-description" rows="3" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-indigo-500 focus:outline-none" placeholder="商材の詳細説明"></textarea>
+                </div>
+            </div>
+
+            <div class="flex gap-4 mt-8">
+                <button onclick="closeCreateProductModal()" class="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition">
+                    キャンセル
+                </button>
+                <button onclick="createProduct()" class="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition">
+                    登録
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Worker Modal -->
+    <div id="create-worker-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-slate-800 rounded-2xl p-8 w-full max-w-2xl border border-slate-700">
+            <h3 class="text-2xl font-bold text-white mb-6">新規作業者登録</h3>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">名前</label>
+                    <input id="worker-name" type="text" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-indigo-500 focus:outline-none" placeholder="山田太郎">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">メールアドレス</label>
+                    <input id="worker-email" type="email" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-indigo-500 focus:outline-none" placeholder="yamada@example.com">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">スキルレベル</label>
+                    <select id="worker-skill-level" class="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-indigo-500 focus:outline-none">
+                        <option value="beginner">初級 (Beginner)</option>
+                        <option value="intermediate">中級 (Intermediate)</option>
+                        <option value="advanced">上級 (Advanced)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex gap-4 mt-8">
+                <button onclick="closeCreateWorkerModal()" class="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition">
+                    キャンセル
+                </button>
+                <button onclick="createWorker()" class="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition">
+                    登録
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="frontend/js/api.js"></script>
+    <script>
+        // Global State
+        let allWorkers = [];
+        let allProducts = [];
+        let allTargetLists = [];
+        let allProjects = [];
+
+        // API Status Check
+        async function checkAPIStatus() {
+            try {
+                const response = await fetch(API_BASE_URL + '/health');
+                const health = await response.json();
+                document.getElementById('api-status').innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                        <span class="text-xs text-slate-400">API接続完了</span>
+                    </div>
+                `;
+                document.getElementById('system-status-dot').className = 'w-2 h-2 rounded-full bg-green-500';
+                document.getElementById('system-status-text').textContent = 'API Connected';
+            } catch (error) {
+                console.error('API接続エラー:', error);
+                document.getElementById('api-status').innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-red-500"></div>
+                        <span class="text-xs text-red-400">API接続失敗</span>
+                    </div>
+                `;
+                document.getElementById('system-status-dot').className = 'w-2 h-2 rounded-full bg-red-500';
+                document.getElementById('system-status-text').textContent = 'API Error';
+            }
+        }
+
+        // View Switching
+        function switchView(viewName) {
+            // Hide all views
+            document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+            // Show selected view
+            document.getElementById(`view-${viewName}`).classList.add('active');
+            
+            // Update nav buttons
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-lg', 'shadow-indigo-900/50');
+                btn.classList.add('text-slate-400');
+            });
+            document.getElementById(`nav-${viewName}`).classList.add('bg-indigo-600', 'text-white', 'shadow-lg', 'shadow-indigo-900/50');
+            document.getElementById(`nav-${viewName}`).classList.remove('text-slate-400');
+
+            // Update page title
+            const titles = {
+                'overview': '全体サマリー',
+                'projects': 'プロジェクト管理',
+                'db-company': '企業リストDB',
+                'db-product': '案件・商材DB',
+                'db-worker': '作業者DB'
+            };
+            document.getElementById('page-title').textContent = titles[viewName];
+
+            // Load data for the view
+            loadViewData(viewName);
+        }
+
+        // Load data for current view
+        async function loadViewData(viewName) {
+            try {
+                switch (viewName) {
+                    case 'overview':
+                        await renderOverview();
+                        break;
+                    case 'projects':
+                        await renderProjects();
+                        break;
+                    case 'db-company':
+                        await renderCompanyDB();
+                        break;
+                    case 'db-product':
+                        await renderProductDB();
+                        break;
+                    case 'db-worker':
+                        await renderWorkerDB();
+                        break;
+                }
+            } catch (error) {
+                console.error(`Error loading ${viewName}:`, error);
+            }
+        }
+
+        // Render Overview
+        async function renderOverview() {
+            try {
+                const [projects, workers, tasks] = await Promise.all([
+                    API.Projects.getAll(),
+                    API.Workers.getAll(),
+                    API.Tasks.getAll()
+                ]);
+
+                // Update stats
+                document.getElementById('overview-total-tasks').textContent = tasks.length;
+                document.getElementById('overview-completed-tasks').textContent = tasks.filter(t => t.status === 'success').length;
+                document.getElementById('overview-active-projects').textContent = projects.length;
+                document.getElementById('overview-total-workers').textContent = workers.length;
+
+                // Recent projects
+                const recentProjects = projects.slice(0, 5);
+                document.getElementById('recent-projects').innerHTML = recentProjects.length > 0 
+                    ? recentProjects.map(p => `
+                        <div class="flex items-center justify-between p-3 bg-slate-900 rounded-lg">
+                            <span class="text-white font-medium">${p.name}</span>
+                            <span class="text-xs text-slate-500">${p.task_count}タスク</span>
+                        </div>
+                    `).join('')
+                    : '<p class="text-slate-500 text-sm">プロジェクトがありません</p>';
+
+                // Top workers by points
+                const topWorkers = workers.sort((a, b) => b.points - a.points).slice(0, 5);
+                document.getElementById('top-workers').innerHTML = topWorkers.map((w, i) => `
+                    <div class="flex items-center justify-between p-3 bg-slate-900 rounded-lg">
+                        <div class="flex items-center gap-3">
+                            <span class="text-2xl">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '👤'}</span>
+                            <span class="text-white font-medium">${w.name}</span>
+                        </div>
+                        <span class="text-yellow-400 font-bold">${w.points}pt</span>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Overview render error:', error);
+            }
+        }
+
+        // Render Projects
+        async function renderProjects() {
+            try {
+                const projects = await API.Projects.getAll();
+                allProjects = projects;
+
+                if (projects.length === 0) {
+                    document.getElementById('projects-list').innerHTML = `
+                        <div class="text-center py-12">
+                            <i class="fa-solid fa-diagram-project text-6xl text-slate-700 mb-4"></i>
+                            <p class="text-slate-400">プロジェクトがありません</p>
+                            <p class="text-slate-600 text-sm mt-2">「新規プロジェクト作成」からプロジェクトを作成してください</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                document.getElementById('projects-list').innerHTML = projects.map(p => `
+                    <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                        <div class="flex items-start justify-between mb-4">
+                            <div>
+                                <h4 class="text-xl font-bold text-white mb-2">${p.name}</h4>
+                                <div class="flex gap-3 text-sm">
+                                    <span class="text-slate-400">
+                                        <i class="fa-solid fa-list mr-1"></i>${p.target_list?.name || 'なし'}
+                                    </span>
+                                    <span class="text-slate-400">
+                                        <i class="fa-solid fa-box mr-1"></i>${p.product?.name || 'なし'}
+                                    </span>
+                                </div>
+                            </div>
+                            <button onclick="viewProjectDetails(${p.id})" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm transition">
+                                詳細
+                            </button>
+                        </div>
+                        <div class="flex gap-4 text-sm">
+                            <span class="text-green-400">
+                                <i class="fa-solid fa-check-circle mr-1"></i>${p.task_count || 0} タスク
+                            </span>
+                            <span class="text-yellow-400">
+                                <i class="fa-solid fa-users mr-1"></i>${p.workers?.length || 0} 作業者
+                            </span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Projects render error:', error);
+                document.getElementById('projects-list').innerHTML = '<p class="text-red-400">エラーが発生しました</p>';
+            }
+        }
+
+        // Render Company DB
+        async function renderCompanyDB() {
+            try {
+                const targetLists = await API.TargetLists.getAll();
+                allTargetLists = targetLists;
+
+                if (targetLists.length === 0) {
+                    document.getElementById('target-lists').innerHTML = `
+                        <div class="text-center py-12">
+                            <i class="fa-solid fa-building text-6xl text-slate-700 mb-4"></i>
+                            <p class="text-slate-400">ターゲットリストがありません</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                document.getElementById('target-lists').innerHTML = targetLists.map(list => `
+                    <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                        <div class="flex items-center justify-between mb-4">
+                            <h4 class="text-xl font-bold text-white">${list.name}</h4>
+                            <span class="px-3 py-1 bg-indigo-600 text-white rounded-lg text-sm">
+                                ${list.company_count || 0} 社
+                            </span>
+                        </div>
+                        <button onclick="viewTargetListCompanies(${list.id})" class="text-indigo-400 hover:text-indigo-300 text-sm">
+                            企業一覧を見る →
+                        </button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Company DB render error:', error);
+            }
+        }
+
+        // Render Product DB
+        async function renderProductDB() {
+            try {
+                const products = await API.Products.getAll();
+                allProducts = products;
+
+                if (products.length === 0) {
+                    document.getElementById('products-list').innerHTML = `
+                        <div class="text-center py-12">
+                            <i class="fa-solid fa-briefcase text-6xl text-slate-700 mb-4"></i>
+                            <p class="text-slate-400">商材がありません</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                document.getElementById('products-list').innerHTML = products.map(p => `
+                    <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="text-xl font-bold text-white">${p.name}</h4>
+                            <span class="text-2xl font-bold text-green-400">¥${p.price.toLocaleString()}</span>
+                        </div>
+                        <p class="text-slate-400 text-sm">${p.description || '説明なし'}</p>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Product DB render error:', error);
+            }
+        }
+
+        // Render Worker DB
+        async function renderWorkerDB() {
+            try {
+                const workers = await API.Workers.getAll();
+                allWorkers = workers;
+
+                if (workers.length === 0) {
+                    document.getElementById('workers-list').innerHTML = `
+                        <div class="text-center py-12">
+                            <i class="fa-solid fa-users text-6xl text-slate-700 mb-4"></i>
+                            <p class="text-slate-400">作業者がいません</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const skillBadges = {
+                    'beginner': '<span class="px-2 py-1 bg-gray-600 text-white rounded text-xs">初級</span>',
+                    'intermediate': '<span class="px-2 py-1 bg-blue-600 text-white rounded text-xs">中級</span>',
+                    'advanced': '<span class="px-2 py-1 bg-purple-600 text-white rounded text-xs">上級</span>'
+                };
+
+                document.getElementById('workers-list').innerHTML = workers.map(w => `
+                    <div class="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <h4 class="text-xl font-bold text-white mb-2">${w.name}</h4>
+                                <p class="text-slate-400 text-sm">${w.email}</p>
+                            </div>
+                            <div class="text-right">
+                                ${skillBadges[w.skill_level] || ''}
+                                <p class="text-yellow-400 font-bold mt-2">${w.points} pt</p>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Worker DB render error:', error);
+            }
+        }
+
+        // Modal Functions
+        function showCreateProjectModal() {
+            // Populate dropdowns
+            API.TargetLists.getAll().then(lists => {
+                const select = document.getElementById('project-target-list');
+                select.innerHTML = '<option value="">選択してください</option>' + 
+                    lists.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+            });
+
+            API.Products.getAll().then(products => {
+                const select = document.getElementById('project-product');
+                select.innerHTML = '<option value="">選択してください</option>' + 
+                    products.map(p => `<option value="${p.id}">${p.name} (¥${p.price.toLocaleString()})</option>`).join('');
+            });
+
+            API.Workers.getAll().then(workers => {
+                const container = document.getElementById('project-workers');
+                container.innerHTML = workers.map(w => `
+                    <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-800 p-2 rounded">
+                        <input type="checkbox" value="${w.id}" class="worker-checkbox">
+                        <span class="text-white">${w.name}</span>
+                        <span class="text-slate-500 text-sm">(${w.skill_level})</span>
+                    </label>
+                `).join('');
+            });
+
+            document.getElementById('create-project-modal').classList.remove('hidden');
+            document.getElementById('create-project-modal').classList.add('flex');
+        }
+
+        function closeCreateProjectModal() {
+            document.getElementById('create-project-modal').classList.add('hidden');
+            document.getElementById('create-project-modal').classList.remove('flex');
+        }
+
+        async function createProject() {
+            const name = document.getElementById('project-name').value;
+            const targetListId = document.getElementById('project-target-list').value;
+            const productId = document.getElementById('project-product').value;
+            const workerIds = Array.from(document.querySelectorAll('.worker-checkbox:checked')).map(cb => parseInt(cb.value));
+
+            if (!name || !targetListId || !productId || workerIds.length === 0) {
+                alert('すべての項目を入力してください');
+                return;
+            }
+
+            try {
+                await API.Projects.create({
+                    name,
+                    target_list_id: parseInt(targetListId),
+                    product_id: parseInt(productId),
+                    worker_ids: workerIds
+                });
+                closeCreateProjectModal();
+                renderProjects();
+                alert('プロジェクトを作成しました');
+            } catch (error) {
+                console.error('Project creation error:', error);
+                alert('プロジェクト作成に失敗しました');
+            }
+        }
+
+        function showCreateTargetListModal() {
+            document.getElementById('create-target-list-modal').classList.remove('hidden');
+            document.getElementById('create-target-list-modal').classList.add('flex');
+        }
+
+        function closeCreateTargetListModal() {
+            document.getElementById('create-target-list-modal').classList.add('hidden');
+            document.getElementById('create-target-list-modal').classList.remove('flex');
+        }
+
+        async function createTargetList() {
+            const name = document.getElementById('target-list-name').value;
+            if (!name) {
+                alert('リスト名を入力してください');
+                return;
+            }
+
+            try {
+                await API.TargetLists.create({ name });
+                closeCreateTargetListModal();
+                renderCompanyDB();
+                alert('ターゲットリストを作成しました');
+            } catch (error) {
+                console.error('Target list creation error:', error);
+                alert('作成に失敗しました');
+            }
+        }
+
+        function showCreateProductModal() {
+            document.getElementById('create-product-modal').classList.remove('hidden');
+            document.getElementById('create-product-modal').classList.add('flex');
+        }
+
+        function closeCreateProductModal() {
+            document.getElementById('create-product-modal').classList.add('hidden');
+            document.getElementById('create-product-modal').classList.remove('flex');
+        }
+
+        async function createProduct() {
+            const name = document.getElementById('product-name').value;
+            const price = document.getElementById('product-price').value;
+            const description = document.getElementById('product-description').value;
+
+            if (!name || !price) {
+                alert('商材名と価格を入力してください');
+                return;
+            }
+
+            try {
+                await API.Products.create({
+                    name,
+                    price: parseInt(price),
+                    description
+                });
+                closeCreateProductModal();
+                renderProductDB();
+                alert('商材を登録しました');
+            } catch (error) {
+                console.error('Product creation error:', error);
+                alert('登録に失敗しました');
+            }
+        }
+
+        function showCreateWorkerModal() {
+            document.getElementById('create-worker-modal').classList.remove('hidden');
+            document.getElementById('create-worker-modal').classList.add('flex');
+        }
+
+        function closeCreateWorkerModal() {
+            document.getElementById('create-worker-modal').classList.add('hidden');
+            document.getElementById('create-worker-modal').classList.remove('flex');
+        }
+
+        async function createWorker() {
+            const name = document.getElementById('worker-name').value;
+            const email = document.getElementById('worker-email').value;
+            const skillLevel = document.getElementById('worker-skill-level').value;
+
+            if (!name || !email) {
+                alert('名前とメールアドレスを入力してください');
+                return;
+            }
+
+            try {
+                await API.Workers.create({
+                    name,
+                    email,
+                    skill_level: skillLevel
+                });
+                closeCreateWorkerModal();
+                renderWorkerDB();
+                alert('作業者を登録しました');
+            } catch (error) {
+                console.error('Worker creation error:', error);
+                alert('登録に失敗しました: ' + (error.message || ''));
+            }
+        }
+
+        function refreshCurrentView() {
+            const activeView = document.querySelector('.view-section.active');
+            if (activeView) {
+                const viewName = activeView.id.replace('view-', '');
+                loadViewData(viewName);
+            }
+        }
+
+        function viewProjectDetails(projectId) {
+            alert(`プロジェクトID ${projectId} の詳細画面（実装予定）`);
+        }
+
+        function viewTargetListCompanies(listId) {
+            alert(`リストID ${listId} の企業一覧（実装予定）`);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await checkAPIStatus();
+            await renderOverview();
+        });
+    </script>
+</body>
+</html>

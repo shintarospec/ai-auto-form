@@ -23,7 +23,7 @@ class GeminiService:
             raise ValueError("GEMINI_API_KEY is not set")
         
         genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-pro')
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
     
     def analyze_company_website(self, html_content: str, company_url: str) -> Dict:
         """
@@ -167,6 +167,107 @@ Webサイトのコンテンツ:
         except Exception as e:
             print(f"Message Generation Error: {e}")
             raise
+    
+    def generate_custom_message_simple(
+        self,
+        company_info: Dict,
+        project_info: Dict
+    ) -> str:
+        """
+        Phase 2-A: 企業情報とプロジェクトテンプレートから最適化メッセージ生成
+        
+        Args:
+            company_info: {
+                'name': 企業名,
+                'industry': 業界,
+                'description': 会社概要・事業内容,
+                'employee_count': 従業員数（オプション）,
+                'established_year': 設立年（オプション）
+            }
+            project_info: {
+                'name': 案件名,
+                'message_template': メッセージテンプレート
+            }
+        
+        Returns:
+            カスタマイズされたメッセージ（300文字程度）
+        """
+        # 企業情報の準備
+        company_name = company_info.get('name', '御社')
+        industry = company_info.get('industry', '')
+        description = company_info.get('description', '')
+        employee_count = company_info.get('employee_count')
+        established_year = company_info.get('established_year')
+        
+        # 企業プロフィール文の生成
+        company_profile = f"【対象企業】\n企業名: {company_name}"
+        if industry:
+            company_profile += f"\n業界: {industry}"
+        if description:
+            company_profile += f"\n事業内容: {description}"
+        if employee_count:
+            company_profile += f"\n従業員数: {employee_count}名"
+        if established_year:
+            company_profile += f"\n設立: {established_year}年"
+        
+        # テンプレートの文字数を取得
+        template_text = project_info.get('message_template', '')
+        template_length = len(template_text)
+        
+        prompt = f"""
+あなたはプロフェッショナルな営業メッセージ作成の専門家です。
+
+{company_profile}
+
+【メッセージテンプレート】
+{template_text}
+
+上記のテンプレートを、企業情報を踏まえて具体的にカスタマイズしてください。
+
+【要件】
+- テンプレートの構成・流れ・トーンを維持する
+- 文字数: {template_length}文字前後（±50文字程度）
+- 【業界】【具体的な課題】【企業特徴】などのプレースホルダーを企業の実際の情報に置き換える
+- 企業の業界・事業内容に合わせた具体的な提案や事例を含める
+- 丁寧なビジネス文書として、誠実なトーンを保つ
+- 押し付けがましくなく、価値提供を重視
+
+カスタマイズされたメッセージのみを出力してください。余計な説明や記号は不要です。
+        """
+        
+        try:
+            # Safety設定を緩和（正しい形式）
+            from google.generativeai.types import HarmCategory, HarmBlockThreshold
+            
+            safety_settings = {
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+            }
+            
+            response = self.model.generate_content(
+                prompt,
+                generation_config={
+                    'temperature': 0.7,
+                    'max_output_tokens': 2048,  # 800→2048に増加（日本語約500-700文字）
+                },
+                safety_settings=safety_settings
+            )
+            
+            message = response.text.strip()
+            
+            # マークダウンなどの余計な記号を除去
+            message = message.replace('```', '').replace('**', '').strip()
+            
+            return message
+            
+        except Exception as e:
+            print(f"AI Message Generation Error: {e}")
+            import traceback
+            traceback.print_exc()
+            # フォールバック: テンプレートをそのまま返す
+            return project_info.get('message_template', '営業メッセージを生成できませんでした。')
     
     def generate_insight(self, company_analysis: Dict, product_info: Dict) -> str:
         """

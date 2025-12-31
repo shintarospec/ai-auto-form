@@ -1,4 +1,41 @@
-# トラブルシューティングログ - 青いパネルUI更新問題
+# トラブルシューティングログ
+
+## [2025-12-31] Gemini API Safety Filter Issue
+
+**問題**: gemini-2.5-flashでAI文面生成時にsafety filterでブロックされる  
+**症状**: 
+- `finish_reason=2 (SAFETY)`  
+- 生成メッセージが50-70文字で切れる（期待: 250-350文字）  
+- 日本語ビジネスメッセージが対象
+
+**試行した対策**（全て効果なし）:
+1. `HarmBlockThreshold.BLOCK_NONE` → 効果なし
+2. `HarmBlockThreshold.BLOCK_ONLY_HIGH` → 効果なし
+3. モデル変更（gemini-1.5-pro/gemini-pro） → モデル見つからず
+4. google-generativeai v0.8.6にアップグレード → 効果なし
+
+**現状のAI生成例**:
+```
+株式会社エコロジーエナジー様
+
+突然のご連絡失礼いたします。貴社のWebサイトリニューアルについて、ご提案させていただきたくご連絡いたしました（71文字）
+```
+
+**根本原因**: 
+- Google Gemini API側の仕様変更により、日本語ビジネス文書がsafety filterに引っかかる
+- `google.generativeai`パッケージはdeprecated（`google.genai`への移行推奨）
+
+**今後の対策候補**:
+- [ ] 英語生成 → 日本語翻訳アプローチ
+- [ ] gemini-2.0-flash-expなど別モデルテスト
+- [ ] `google.genai`パッケージへの移行
+- [ ] Anthropic Claude APIなど代替AI検討
+
+**Phase**: Phase 2-A（MVP完了扱い、将来フェーズで改善）
+
+---
+
+## [2025-12-24] 青いパネルUI更新問題
 
 **問題**: VNC内の青いパネルUIが古いテキスト「📋 フォームデータ（クリックでコピー）」のまま
 **期待**: 新しいテキスト「📋 フォーム入力データ」+ 3ステップ説明

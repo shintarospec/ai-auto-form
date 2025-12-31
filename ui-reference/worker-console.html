@@ -1,0 +1,1366 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worker Console - AI AutoForm (API版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #3b82f6;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .view-section { display: none; }
+        .view-section.active { display: block; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex overflow-hidden">
+
+    <!-- サイドバー -->
+    <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col shadow-xl z-20">
+        <div class="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950">
+            <i class="fa-solid fa-robot text-blue-500 text-xl mr-3"></i>
+            <span class="font-bold text-lg text-white tracking-wide">AI AutoForm</span>
+        </div>
+
+        <!-- Worker Selection -->
+        <div class="p-4 border-b border-slate-800">
+            <label class="text-xs text-slate-500 mb-2 block">ログインユーザー</label>
+            <select id="worker-select" onchange="switchWorker()" class="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-blue-500 focus:outline-none">
+                <option value="">選択してください</option>
+            </select>
+        </div>
+
+        <nav class="flex-1 py-6 space-y-2 px-3">
+            <button onclick="switchView('cockpit')" id="nav-cockpit" class="nav-btn w-full flex items-center px-4 py-3 rounded-lg bg-blue-600 text-white shadow-lg transition-colors">
+                <i class="fa-solid fa-rocket w-6"></i>
+                <span class="font-medium">実行コックピット</span>
+            </button>
+            <button onclick="switchView('projects')" id="nav-projects" class="nav-btn w-full flex items-center px-4 py-3 rounded-lg hover:bg-slate-800 transition-colors text-slate-400">
+                <i class="fa-solid fa-folder-open w-6"></i>
+                <span class="font-medium">マイプロジェクト</span>
+            </button>
+            <button onclick="switchView('tasks')" id="nav-tasks" class="nav-btn w-full flex items-center px-4 py-3 rounded-lg hover:bg-slate-800 transition-colors text-slate-400">
+                <i class="fa-solid fa-list-check w-6"></i>
+                <span class="font-medium">タスク一覧</span>
+            </button>
+            <button onclick="switchView('stats')" id="nav-stats" class="nav-btn w-full flex items-center px-4 py-3 rounded-lg hover:bg-slate-800 transition-colors text-slate-400">
+                <i class="fa-solid fa-coins w-6"></i>
+                <span class="font-medium">ポイント・実績</span>
+            </button>
+        </nav>
+
+        <div id="worker-info" class="p-4 border-t border-slate-800 bg-slate-900">
+            <p class="text-slate-500 text-sm text-center">作業者を選択してください</p>
+        </div>
+    </aside>
+
+    <!-- メインコンテンツエリア -->
+    <main class="flex-1 flex flex-col relative overflow-hidden bg-slate-50">
+        
+        <!-- ヘッダー -->
+        <header class="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shadow-sm z-10">
+            <h2 id="page-title" class="text-xl font-bold text-slate-800">実行コックピット</h2>
+            <div class="flex items-center gap-6">
+                <div class="flex flex-col items-end">
+                    <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">獲得ポイント</span>
+                    <span id="worker-points" class="text-lg font-bold text-slate-700">
+                        <i class="fa-solid fa-coins text-yellow-500 mr-1"></i>0 pt
+                    </span>
+                </div>
+                <button onclick="refreshCurrentView()" class="text-slate-400 hover:text-slate-600 transition">
+                    <i class="fa-solid fa-rotate text-xl"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- VIEW 1: マイプロジェクト -->
+        <div id="view-projects" class="view-section flex-1 overflow-y-auto p-8">
+            
+            <!-- 統計サマリー -->
+            <div class="grid grid-cols-3 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 font-bold uppercase">完了タスク数</p>
+                        <p class="text-2xl font-bold text-slate-800"><span id="project-completed-count">0</span> <span class="text-sm font-normal text-slate-400">件</span></p>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-full bg-yellow-50 text-yellow-600 flex items-center justify-center text-xl">
+                        <i class="fa-solid fa-coins"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 font-bold uppercase">獲得ポイント</p>
+                        <p class="text-2xl font-bold text-slate-800" id="project-total-points">0 pt</p>
+                    </div>
+                </div>
+                <div class="bg-gradient-to-r from-indigo-600 to-blue-600 p-6 rounded-2xl shadow-lg text-white flex justify-between items-center">
+                    <div>
+                        <p class="text-xs text-indigo-200 font-bold uppercase mb-1">現在のランク</p>
+                        <p class="text-2xl font-bold" id="worker-rank">Bronze</p>
+                    </div>
+                    <i class="fa-solid fa-medal text-4xl text-yellow-300 opacity-80"></i>
+                </div>
+            </div>
+
+            <h3 class="text-lg font-bold text-slate-700 mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-briefcase text-slate-400"></i> 担当プロジェクト
+            </h3>
+
+            <!-- プロジェクトカード一覧 -->
+            <div id="projects-list" class="grid grid-cols-2 gap-6">
+                <div class="col-span-2 text-center py-12">
+                    <i class="fa-solid fa-inbox text-5xl text-slate-300 mb-4"></i>
+                    <p class="text-slate-500">作業者を選択してください</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 2: タスク一覧 -->
+        <div id="view-tasks" class="view-section flex-1 overflow-y-auto p-8">
+            
+            <!-- ステータスカード -->
+            <div class="grid grid-cols-4 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-xl shadow-md border border-slate-200">
+                    <p class="text-xs text-slate-500 font-bold uppercase mb-2">未着手</p>
+                    <p class="text-3xl font-bold text-slate-700" id="task-count-pending">0</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md border border-slate-200">
+                    <p class="text-xs text-slate-500 font-bold uppercase mb-2">進行中</p>
+                    <p class="text-3xl font-bold text-blue-600" id="task-count-running">0</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md border border-slate-200">
+                    <p class="text-xs text-slate-500 font-bold uppercase mb-2">完了</p>
+                    <p class="text-3xl font-bold text-green-600" id="task-count-success">0</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-md border border-slate-200">
+                    <p class="text-xs text-slate-500 font-bold uppercase mb-2">エラー</p>
+                    <p class="text-3xl font-bold text-red-600" id="task-count-error">0</p>
+                </div>
+            </div>
+
+            <!-- タスクリスト -->
+            <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden">
+                <div class="p-6 border-b border-slate-200 bg-slate-50">
+                    <h3 class="text-lg font-bold text-slate-800">担当タスク一覧</h3>
+                </div>
+                <div id="tasks-list" class="divide-y divide-slate-200">
+                    <div class="p-8 text-center text-slate-500">
+                        <i class="fa-solid fa-inbox text-5xl text-slate-300 mb-4"></i>
+                        <p>作業者を選択してください</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 2: 実績・統計 -->
+        <div id="view-stats" class="view-section flex-1 overflow-y-auto p-8">
+            <div class="bg-white rounded-xl shadow-md border border-slate-200 p-8">
+                <h3 class="text-2xl font-bold text-slate-800 mb-6">作業実績</h3>
+                <div id="stats-content" class="space-y-6">
+                    <p class="text-slate-500">作業者を選択してください</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 4: 実行コックピット -->
+        <div id="view-cockpit" class="view-section active flex-1 flex flex-col h-full bg-slate-100">
+            <!-- ターゲット情報バー -->
+            <div class="bg-white px-6 py-3 border-b border-slate-200 flex items-center justify-between shadow-sm z-10">
+                <div class="flex items-center gap-4">
+                    <div class="bg-slate-100 p-2 rounded text-slate-500">
+                        <i class="fa-solid fa-building"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold" id="cockpit-project-name">-</span>
+                            <span class="text-xs text-slate-400">|</span>
+                            <a href="#" id="cockpit-company-url" target="_blank" class="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                                - <i class="fa-solid fa-external-link-alt"></i>
+                            </a>
+                        </div>
+                        <h2 class="text-lg font-bold text-slate-800 leading-tight" id="cockpit-company-name">タスクを選択してください</h2>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="text-right">
+                        <div class="text-xs text-slate-400 font-bold uppercase">今回の報酬</div>
+                        <div class="text-sm font-bold text-yellow-600">+ 50 pt</div>
+                    </div>
+                    <div class="h-8 w-px bg-slate-200"></div>
+                    <div class="text-right mr-2">
+                        <div class="text-xs text-slate-400 font-bold uppercase">Progress</div>
+                        <div class="text-sm font-bold text-slate-700" id="cockpit-progress">0 / 0 件目</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 作業エリア (3ペイン構成) -->
+            <div class="flex-1 flex overflow-hidden p-4 gap-4">
+                
+                <!-- 左：送信者情報（読み取り専用） -->
+                <div class="w-1/4 flex flex-col gap-4">
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex-1 overflow-y-auto">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase mb-3"><i class="fa-solid fa-circle-info mr-1"></i> 入力用プロファイル情報</h4>
+                        <p class="text-xs text-slate-400 mb-4 leading-relaxed">
+                            ※ フォームの自動入力が漏れた場合、以下の情報をコピー＆ペーストして入力してください。
+                        </p>
+                        
+                        <div class="space-y-4" id="cockpit-profile">
+                            <div class="group">
+                                <label class="text-[10px] text-slate-500 font-bold uppercase block mb-1">会社名</label>
+                                <div class="flex">
+                                    <input type="text" value="株式会社AIソリューションズ" class="w-full text-sm bg-slate-50 border-slate-200 rounded-l px-2 py-1.5 border text-slate-600 outline-none" readonly>
+                                    <button onclick="copyToClipboard('株式会社AIソリューションズ')" class="bg-slate-100 hover:bg-slate-200 border border-l-0 border-slate-200 rounded-r px-3 text-slate-500 transition">
+                                        <i class="fa-regular fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="group">
+                                <label class="text-[10px] text-slate-500 font-bold uppercase block mb-1">担当者名</label>
+                                <div class="flex">
+                                    <input type="text" id="profile-name" value="-" class="w-full text-sm bg-slate-50 border-slate-200 rounded-l px-2 py-1.5 border text-slate-600 outline-none" readonly>
+                                    <button onclick="copyProfileField('profile-name')" class="bg-slate-100 hover:bg-slate-200 border border-l-0 border-slate-200 rounded-r px-3 text-slate-500 transition">
+                                        <i class="fa-regular fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="group">
+                                <label class="text-[10px] text-slate-500 font-bold uppercase block mb-1">Email</label>
+                                <div class="flex">
+                                    <input type="text" id="profile-email" value="-" class="w-full text-sm bg-slate-50 border-slate-200 rounded-l px-2 py-1.5 border text-slate-600 outline-none" readonly>
+                                    <button onclick="copyProfileField('profile-email')" class="bg-slate-100 hover:bg-slate-200 border border-l-0 border-slate-200 rounded-r px-3 text-slate-500 transition">
+                                        <i class="fa-regular fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="group">
+                                <label class="text-[10px] text-slate-500 font-bold uppercase block mb-1">TEL</label>
+                                <div class="flex">
+                                    <input type="text" value="03-1234-5678" class="w-full text-sm bg-slate-50 border-slate-200 rounded-l px-2 py-1.5 border text-slate-600 outline-none" readonly>
+                                    <button onclick="copyToClipboard('03-1234-5678')" class="bg-slate-100 hover:bg-slate-200 border border-l-0 border-slate-200 rounded-r px-3 text-slate-500 transition">
+                                        <i class="fa-regular fa-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 中央：AI生成コンテンツ (確認用) -->
+                <div class="w-2/4 flex flex-col gap-4">
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-full relative overflow-hidden">
+                        <div class="border-b border-slate-100 px-4 py-3 flex justify-between items-center bg-slate-50">
+                            <h3 class="font-bold text-slate-700 text-sm"><i class="fa-solid fa-wand-magic-sparkles text-purple-500 mr-2"></i>送信メッセージ内容</h3>
+                            <span class="text-xs text-slate-400 bg-white border border-slate-200 px-2 py-1 rounded">
+                                <i class="fa-solid fa-robot mr-1"></i> AI生成済
+                            </span>
+                        </div>
+                        
+                        <div class="flex-1 p-0 relative">
+                            <!-- ローディング -->
+                            <div id="ai-loading" class="hidden absolute inset-0 bg-white/90 z-10 flex flex-col items-center justify-center">
+                                <div class="loader mb-3"></div>
+                                <p class="text-sm text-slate-600 font-bold">メッセージを最適化中...</p>
+                            </div>
+                            
+                            <textarea id="message-area" class="w-full h-full p-6 text-sm leading-relaxed text-slate-700 resize-none focus:outline-none" spellcheck="false" placeholder="タスクを選択するとメッセージが表示されます"></textarea>
+                        </div>
+                        
+                        <div class="px-4 py-2 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
+                            <span class="text-xs text-slate-400" id="char-count">文字数: 0文字</span>
+                            <div class="flex gap-2">
+                                <button onclick="copyMessageArea()" class="text-xs bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-300 font-bold px-3 py-1.5 rounded transition shadow-sm">
+                                    <i class="fa-regular fa-copy mr-1"></i> コピー
+                                </button>
+                                <button onclick="regenerateMessage()" class="text-xs bg-white border border-slate-200 text-slate-600 hover:text-purple-600 hover:border-purple-300 font-bold px-3 py-1.5 rounded transition shadow-sm">
+                                    <i class="fa-solid fa-rotate mr-1"></i> 文面再生成
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右:ブラウザビュー（noVNC） -->
+                <div class="w-1/4 flex flex-col gap-4">
+                    
+                    <!-- noVNC Browser View -->
+                    <div class="flex-1 bg-white rounded-xl shadow-lg border-2 border-slate-200 overflow-hidden flex flex-col">
+                        <div class="bg-gradient-to-r from-slate-700 to-slate-800 px-4 py-3 flex justify-between items-center">
+                            <h3 class="text-white font-bold text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-desktop text-blue-400"></i>
+                                ブラウザビュー（リモート）
+                            </h3>
+                            <div class="flex gap-2">
+                                <button onclick="reloadBrowserView()" class="text-slate-300 hover:text-white text-xs px-2 py-1 rounded bg-slate-600 hover:bg-slate-500 transition">
+                                    <i class="fa-solid fa-rotate"></i>
+                                </button>
+                                <button onclick="toggleFullscreenBrowser()" class="text-slate-300 hover:text-white text-xs px-2 py-1 rounded bg-slate-600 hover:bg-slate-500 transition">
+                                    <i class="fa-solid fa-expand"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex-1 relative bg-slate-900">
+                            <iframe 
+                                id="browser-view" 
+                                src="" 
+                                class="w-full h-full border-0"
+                                allow="fullscreen">
+                            </iframe>
+                            <div id="browser-placeholder" class="absolute inset-0 flex items-center justify-center bg-slate-900 text-slate-400">
+                                <div class="text-center">
+                                    <i class="fa-solid fa-browser text-4xl mb-3 opacity-30"></i>
+                                    <p class="text-sm">自動送信をクリックすると<br>ブラウザが表示されます</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- コントロールパネル（コンパクト版） -->
+                    <div class="bg-slate-800 p-4 rounded-xl shadow-lg">
+                        <!-- 作業の流れ（折りたたみ可能） -->
+                        <details class="mb-3">
+                            <summary class="text-slate-300 text-xs font-bold cursor-pointer hover:text-white flex items-center gap-2">
+                                <i class="fa-solid fa-circle-info"></i> 作業の流れを確認
+                            </summary>
+                            <div class="mt-2 bg-slate-700 rounded-lg p-3 text-xs text-slate-300 space-y-1">
+                                <div class="flex items-start gap-2">
+                                    <span class="text-blue-300 font-bold">1</span>
+                                    <span>必須項目が埋まっているか確認</span>
+                                </div>
+                                <div class="flex items-start gap-2">
+                                    <span class="text-blue-300 font-bold">2</span>
+                                    <span><b class="text-white">reCAPTCHA</b>があれば対応</span>
+                                </div>
+                                <div class="flex items-start gap-2">
+                                    <span class="text-blue-300 font-bold">3</span>
+                                    <span>ブラウザで「<b class="text-white">送信</b>」を押す</span>
+                                </div>
+                            </div>
+                        </details>
+                        
+                        <div class="flex flex-col gap-2">
+                            <!-- AI自動送信ボタン -->
+                            <button onclick="autoSubmitFromCockpit()" id="auto-submit-btn" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-3 rounded-lg transition shadow-lg flex items-center justify-center gap-2 transform active:scale-95" disabled>
+                                <i class="fa-solid fa-rocket"></i>
+                                <span>自動送信スタート</span>
+                            </button>
+                            
+                            <div class="flex gap-2">
+                                <button onclick="markAsNG()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs py-2 rounded-lg font-bold" disabled id="ng-btn">
+                                    NG
+                                </button>
+                                <button onclick="skipCockpitTask()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs py-2 rounded-lg font-bold" disabled id="skip-btn">
+                                    スキップ
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 送信ステータス表示 -->
+                        <div id="submit-status" class="hidden mt-3 p-3 rounded-lg text-sm"></div>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Task Detail Modal -->
+    <div id="task-detail-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white rounded-2xl p-8 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-2xl font-bold text-slate-800">タスク詳細</h3>
+                <button onclick="closeTaskDetailModal()" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark text-2xl"></i>
+                </button>
+            </div>
+
+            <div id="task-detail-content" class="space-y-6">
+                <!-- Content will be populated dynamically -->
+            </div>
+
+            <div class="flex gap-4 mt-8 pt-6 border-t border-slate-200">
+                <button onclick="closeTaskDetailModal()" class="flex-1 px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium transition">
+                    閉じる
+                </button>
+                <button id="execute-task-btn" onclick="executeTask()" class="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition">
+                    <i class="fa-solid fa-paper-plane mr-2"></i>実行
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="frontend/js/api.js"></script>
+    <script>
+        let currentWorker = null;
+        let currentTasks = [];
+        let currentProjects = [];
+        let selectedTask = null;
+        let cockpitTaskQueue = [];
+        let cockpitCurrentIndex = 0;
+
+        // noVNC configuration
+        let noVncUrl = '';
+        let browserViewLoaded = false;
+
+        // Get noVNC URL from Codespaces environment
+        function getNoVncUrl() {
+            // Detect Codespaces URL
+            const hostname = window.location.hostname;
+            // noVNC uses port 6080 (e.g., codespaces-abc-8000.app.github.dev -> codespaces-abc-6080.app.github.dev)
+            if (hostname.includes('app.github.dev')) {
+                const baseHost = hostname.split('-').slice(0, -1).join('-'); // Remove port
+                noVncUrl = `https://${baseHost}-6080.app.github.dev/vnc.html?autoconnect=true&resize=scale`;
+                return noVncUrl;
+            }
+            // Fallback for local development
+            return 'http://localhost:6080/vnc.html?autoconnect=true&resize=scale';
+        }
+
+        // Load noVNC browser view
+        function loadBrowserView() {
+            if (browserViewLoaded) return;
+            
+            const iframe = document.getElementById('browser-view');
+            const placeholder = document.getElementById('browser-placeholder');
+            
+            const url = getNoVncUrl();
+            iframe.src = url;
+            
+            // Hide placeholder after a short delay
+            setTimeout(() => {
+                placeholder.style.display = 'none';
+                browserViewLoaded = true;
+            }, 1000);
+        }
+
+        // Reload browser view
+        function reloadBrowserView() {
+            const iframe = document.getElementById('browser-view');
+            if (iframe.src) {
+                iframe.src = iframe.src;
+            } else {
+                loadBrowserView();
+            }
+        }
+
+        // Toggle fullscreen browser
+        function toggleFullscreenBrowser() {
+            const iframe = document.getElementById('browser-view');
+            if (iframe.requestFullscreen) {
+                if (!document.fullscreenElement) {
+                    iframe.requestFullscreen();
+                } else {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        // Initialize - Load workers list
+        async function initializeWorkers() {
+            try {
+                const workers = await API.Workers.getAll();
+                const select = document.getElementById('worker-select');
+                select.innerHTML = '<option value="">選択してください</option>' + 
+                    workers.map(w => `<option value="${w.id}">${w.name} (${w.skill_level})</option>`).join('');
+            } catch (error) {
+                console.error('Workers load error:', error);
+            }
+        }
+
+        // Switch worker
+        async function switchWorker() {
+            const workerId = document.getElementById('worker-select').value;
+            if (!workerId) {
+                currentWorker = null;
+                updateWorkerInfo();
+                return;
+            }
+
+            try {
+                currentWorker = await API.Workers.getById(parseInt(workerId));
+                updateWorkerInfo();
+                await loadProjects();
+                await loadTasks();
+            } catch (error) {
+                console.error('Worker switch error:', error);
+            }
+        }
+
+        // Update worker info display
+        function updateWorkerInfo() {
+            const infoDiv = document.getElementById('worker-info');
+            const pointsSpan = document.getElementById('worker-points');
+
+            if (!currentWorker) {
+                infoDiv.innerHTML = '<p class="text-slate-500 text-sm text-center">作業者を選択してください</p>';
+                pointsSpan.innerHTML = '<i class="fa-solid fa-coins text-yellow-500 mr-1"></i>0 pt';
+                return;
+            }
+
+            const skillBadges = {
+                'beginner': '<span class="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">初級</span>',
+                'intermediate': '<span class="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">中級</span>',
+                'advanced': '<span class="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs">上級</span>'
+            };
+
+            infoDiv.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md border-2 border-slate-700">
+                        ${currentWorker.name.substring(0, 2)}
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-sm text-white font-bold">${currentWorker.name}</p>
+                        ${skillBadges[currentWorker.skill_level] || ''}
+                    </div>
+                </div>
+            `;
+
+            pointsSpan.innerHTML = `<i class="fa-solid fa-coins text-yellow-500 mr-1"></i>${currentWorker.points} pt`;
+        }
+
+        // Load projects for current worker
+        async function loadProjects() {
+            if (!currentWorker) {
+                document.getElementById('projects-list').innerHTML = `
+                    <div class="col-span-2 text-center py-12">
+                        <i class="fa-solid fa-inbox text-5xl text-slate-300 mb-4"></i>
+                        <p class="text-slate-500">作業者を選択してください</p>
+                    </div>
+                `;
+                return;
+            }
+
+            try {
+                const allProjects = await API.Projects.getAll();
+                // Filter projects where current worker is assigned
+                currentProjects = allProjects.filter(p => 
+                    p.worker_ids && p.worker_ids.includes(currentWorker.id)
+                );
+
+                // Update summary stats
+                const completedTasks = currentTasks.filter(t => t.status === 'success').length;
+                document.getElementById('project-completed-count').textContent = completedTasks;
+                document.getElementById('project-total-points').textContent = `${currentWorker.points} pt`;
+                
+                // Determine rank based on points
+                let rank = 'Bronze';
+                if (currentWorker.points >= 2000) rank = 'Gold';
+                else if (currentWorker.points >= 1000) rank = 'Silver';
+                document.getElementById('worker-rank').textContent = rank;
+
+                if (currentProjects.length === 0) {
+                    document.getElementById('projects-list').innerHTML = `
+                        <div class="col-span-2 text-center py-12">
+                            <i class="fa-solid fa-inbox text-5xl text-slate-300 mb-4"></i>
+                            <p class="text-slate-500">担当プロジェクトがありません</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                document.getElementById('projects-list').innerHTML = currentProjects.map(project => {
+                    const projectTasks = currentTasks.filter(t => t.project_id === project.id);
+                    const completedCount = projectTasks.filter(t => t.status === 'success').length;
+                    const totalCount = projectTasks.length;
+                    const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+                    return `
+                        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden group">
+                            <div class="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-start">
+                                <div>
+                                    <h4 class="text-lg font-bold text-slate-800">${project.name}</h4>
+                                    <p class="text-xs text-slate-500 mt-1">案件ID: #PRJ-${String(project.id).padStart(3, '0')}</p>
+                                    <p class="text-xs text-slate-600 mt-2">
+                                        <i class="fa-solid fa-box mr-1"></i>${project.product_name || '商材未設定'}
+                                    </p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-xs text-slate-400 font-bold uppercase">獲得可能</p>
+                                    <p class="text-xl font-bold text-yellow-600">50 pt <span class="text-xs text-slate-400 font-normal">/件</span></p>
+                                </div>
+                            </div>
+                            <div class="p-6">
+                                <div class="flex justify-between text-sm mb-2">
+                                    <span class="text-slate-500 font-bold">進捗状況</span>
+                                    <span class="text-slate-800 font-bold">${completedCount} / ${totalCount} 件</span>
+                                </div>
+                                <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mb-6">
+                                    <div class="bg-blue-600 h-full rounded-full" style="width: ${progressPercent}%"></div>
+                                </div>
+
+                                <div class="flex items-center justify-between">
+                                    <div class="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
+                                        <i class="fa-solid fa-users mr-1"></i> ${project.worker_names?.length || 0}名担当
+                                    </div>
+                                    <button onclick="viewProjectTasks(${project.id})" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl shadow-lg shadow-blue-200 transition transform active:scale-95 flex items-center gap-2">
+                                        タスクを見る <i class="fa-solid fa-arrow-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Projects load error:', error);
+                document.getElementById('projects-list').innerHTML = `
+                    <div class="col-span-2 text-center py-12 text-red-500">
+                        エラーが発生しました
+                    </div>
+                `;
+            }
+        }
+
+        // View project tasks (switch to tasks view and filter)
+        function viewProjectTasks(projectId) {
+            switchView('tasks');
+        }
+
+        // Load tasks for current worker
+        async function loadTasks() {
+            if (!currentWorker) {
+                document.getElementById('tasks-list').innerHTML = `
+                    <div class="p-8 text-center text-slate-500">
+                        <i class="fa-solid fa-inbox text-5xl text-slate-300 mb-4"></i>
+                        <p>作業者を選択してください</p>
+                    </div>
+                `;
+                return;
+            }
+
+            try {
+                const allTasks = await API.Tasks.getAll();
+                currentTasks = allTasks.filter(t => t.worker_id === currentWorker.id);
+
+                // Update counts
+                updateTaskCounts();
+
+                // Render task list
+                if (currentTasks.length === 0) {
+                    document.getElementById('tasks-list').innerHTML = `
+                        <div class="p-8 text-center text-slate-500">
+                            <i class="fa-solid fa-inbox text-5xl text-slate-300 mb-4"></i>
+                            <p>タスクがありません</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const statusColors = {
+                    'pending': 'bg-slate-100 text-slate-700',
+                    'running': 'bg-blue-100 text-blue-700',
+                    'success': 'bg-green-100 text-green-700',
+                    'failed': 'bg-red-100 text-red-700',
+                    'ng': 'bg-orange-100 text-orange-700',
+                    'skipped': 'bg-gray-100 text-gray-700'
+                };
+
+                const statusIcons = {
+                    'pending': 'fa-clock',
+                    'running': 'fa-spinner fa-spin',
+                    'success': 'fa-check-circle',
+                    'failed': 'fa-xmark-circle',
+                    'ng': 'fa-triangle-exclamation',
+                    'skipped': 'fa-forward'
+                };
+
+                const statusLabels = {
+                    'pending': '未着手',
+                    'running': '実行中',
+                    'success': '完了',
+                    'failed': 'エラー',
+                    'ng': 'NG',
+                    'skipped': 'スキップ'
+                };
+
+                document.getElementById('tasks-list').innerHTML = currentTasks.map(task => `
+                    <div class="p-6 hover:bg-slate-50 cursor-pointer transition" onclick="showTaskDetail(${task.id})">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <span class="px-3 py-1 rounded-lg text-sm font-medium ${statusColors[task.status] || 'bg-slate-100 text-slate-700'}">
+                                        <i class="fa-solid ${statusIcons[task.status] || 'fa-question'} mr-1"></i>
+                                        ${statusLabels[task.status] || task.status}
+                                    </span>
+                                    <h4 class="text-lg font-bold text-slate-800">${task.company_name}</h4>
+                                </div>
+                                <p class="text-sm text-slate-600 mb-2">${task.company_url}</p>
+                                ${task.message ? `<p class="text-sm text-slate-500 line-clamp-2">${task.message}</p>` : ''}
+                            </div>
+                            <button class="ml-4 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition">
+                                詳細
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Tasks load error:', error);
+                document.getElementById('tasks-list').innerHTML = `
+                    <div class="p-8 text-center text-red-500">
+                        エラーが発生しました
+                    </div>
+                `;
+            }
+        }
+
+        // Update task counts
+        function updateTaskCounts() {
+            const counts = {
+                pending: 0,
+                running: 0,
+                success: 0,
+                error: 0
+            };
+
+            currentTasks.forEach(task => {
+                if (task.status === 'pending') counts.pending++;
+                else if (task.status === 'running') counts.running++;
+                else if (task.status === 'success') counts.success++;
+                else if (task.status === 'failed' || task.status === 'ng') counts.error++;
+            });
+
+            document.getElementById('task-count-pending').textContent = counts.pending;
+            document.getElementById('task-count-running').textContent = counts.running;
+            document.getElementById('task-count-success').textContent = counts.success;
+            document.getElementById('task-count-error').textContent = counts.error;
+        }
+
+        // Show task detail modal
+        async function showTaskDetail(taskId) {
+            try {
+                selectedTask = await API.Tasks.getById(taskId);
+                
+                const statusColors = {
+                    'pending': 'bg-slate-100 text-slate-700',
+                    'running': 'bg-blue-100 text-blue-700',
+                    'success': 'bg-green-100 text-green-700',
+                    'failed': 'bg-red-100 text-red-700',
+                    'ng': 'bg-orange-100 text-orange-700',
+                    'skipped': 'bg-gray-100 text-gray-700'
+                };
+
+                document.getElementById('task-detail-content').innerHTML = `
+                    <div class="bg-slate-50 p-6 rounded-lg">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-xs text-slate-500 font-bold uppercase mb-1">ステータス</p>
+                                <span class="inline-block px-3 py-1 rounded-lg text-sm font-medium ${statusColors[selectedTask.status] || 'bg-slate-100'}">
+                                    ${selectedTask.status}
+                                </span>
+                            </div>
+                            <div>
+                                <p class="text-xs text-slate-500 font-bold uppercase mb-1">企業名</p>
+                                <p class="text-sm font-bold text-slate-800">${selectedTask.company_name}</p>
+                            </div>
+                            <div class="col-span-2">
+                                <p class="text-xs text-slate-500 font-bold uppercase mb-1">企業URL</p>
+                                <a href="${selectedTask.company_url}" target="_blank" class="text-sm text-blue-600 hover:underline break-all">
+                                    ${selectedTask.company_url}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${selectedTask.message ? `
+                        <div>
+                            <p class="text-xs text-slate-500 font-bold uppercase mb-2">送信メッセージ</p>
+                            <div class="bg-slate-50 p-4 rounded-lg">
+                                <p class="text-sm text-slate-700 whitespace-pre-wrap">${selectedTask.message}</p>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${selectedTask.submitted_at ? `
+                        <div>
+                            <p class="text-xs text-slate-500 font-bold uppercase mb-2">送信日時</p>
+                            <p class="text-sm text-slate-700">${new Date(selectedTask.submitted_at).toLocaleString('ja-JP')}</p>
+                        </div>
+                    ` : ''}
+
+                    ${selectedTask.screenshot_path ? `
+                        <div>
+                            <p class="text-xs text-slate-500 font-bold uppercase mb-2">スクリーンショット</p>
+                            <img src="${selectedTask.screenshot_path}" class="w-full rounded-lg border border-slate-200" alt="Screenshot">
+                        </div>
+                    ` : ''}
+                `;
+
+                // Show/hide execute button based on status
+                const executeBtn = document.getElementById('execute-task-btn');
+                if (selectedTask.status === 'pending') {
+                    executeBtn.classList.remove('hidden');
+                } else {
+                    executeBtn.classList.add('hidden');
+                }
+
+                document.getElementById('task-detail-modal').classList.remove('hidden');
+                document.getElementById('task-detail-modal').classList.add('flex');
+            } catch (error) {
+                console.error('Task detail load error:', error);
+                alert('タスク詳細の読み込みに失敗しました');
+            }
+        }
+
+        function closeTaskDetailModal() {
+            document.getElementById('task-detail-modal').classList.add('hidden');
+            document.getElementById('task-detail-modal').classList.remove('flex');
+            selectedTask = null;
+        }
+
+        // Execute task (submit form)
+        async function executeTask() {
+            if (!selectedTask) return;
+
+            if (!confirm(`${selectedTask.company_name} への送信を実行しますか？`)) {
+                return;
+            }
+
+            try {
+                const executeBtn = document.getElementById('execute-task-btn');
+                executeBtn.disabled = true;
+                executeBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>実行中...';
+
+                // Call submit endpoint
+                await API.Tasks.submit(selectedTask.id, {
+                    message: selectedTask.message || '自動生成メッセージ'
+                });
+
+                alert('送信が完了しました！');
+                closeTaskDetailModal();
+                await loadTasks();
+                
+                // Reload worker to update points
+                if (currentWorker) {
+                    currentWorker = await API.Workers.getById(currentWorker.id);
+                    updateWorkerInfo();
+                }
+            } catch (error) {
+                console.error('Task execution error:', error);
+                alert('送信に失敗しました: ' + (error.message || ''));
+                
+                const executeBtn = document.getElementById('execute-task-btn');
+                executeBtn.disabled = false;
+                executeBtn.innerHTML = '<i class="fa-solid fa-paper-plane mr-2"></i>実行';
+            }
+        }
+
+        // View switching
+        function switchView(viewName) {
+            document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+            document.getElementById(`view-${viewName}`).classList.add('active');
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white', 'shadow-lg');
+                btn.classList.add('text-slate-400');
+            });
+            document.getElementById(`nav-${viewName}`).classList.add('bg-blue-600', 'text-white', 'shadow-lg');
+            document.getElementById(`nav-${viewName}`).classList.remove('text-slate-400');
+
+            const titles = {
+                'projects': 'マイプロジェクト',
+                'tasks': 'タスク一覧',
+                'cockpit': '実行コックピット',
+                'stats': 'ポイント・実績'
+            };
+            document.getElementById('page-title').textContent = titles[viewName];
+
+            if (viewName === 'stats') {
+                renderStats();
+            } else if (viewName === 'projects') {
+                loadProjects();
+            } else if (viewName === 'cockpit') {
+                initializeCockpit();
+            }
+        }
+
+        // Initialize Cockpit
+        function initializeCockpit() {
+            if (!currentWorker) {
+                document.getElementById('cockpit-company-name').textContent = '作業者を選択してください';
+                document.getElementById('auto-submit-btn').disabled = true;
+                document.getElementById('ng-btn').disabled = true;
+                document.getElementById('skip-btn').disabled = true;
+                return;
+            }
+
+            // Load pending tasks for cockpit
+            cockpitTaskQueue = currentTasks.filter(t => t.status === 'pending');
+            cockpitCurrentIndex = 0;
+
+            if (cockpitTaskQueue.length === 0) {
+                document.getElementById('cockpit-company-name').textContent = '実行可能なタスクがありません';
+                document.getElementById('auto-submit-btn').disabled = true;
+                document.getElementById('ng-btn').disabled = true;
+                document.getElementById('skip-btn').disabled = true;
+                return;
+            }
+
+            // Load first task
+            loadCockpitTask(cockpitTaskQueue[cockpitCurrentIndex]);
+        }
+
+        // Load task into cockpit
+        function loadCockpitTask(task) {
+            if (!task) return;
+
+            selectedTask = task;
+
+            // Update header
+            document.getElementById('cockpit-project-name').textContent = `PROJECT #${task.project_id}`;
+            document.getElementById('cockpit-company-url').href = task.company_url;
+            document.getElementById('cockpit-company-url').innerHTML = `${task.company_url} <i class="fa-solid fa-external-link-alt"></i>`;
+            document.getElementById('cockpit-company-name').textContent = task.company_name;
+            document.getElementById('cockpit-progress').textContent = `${cockpitCurrentIndex + 1} / ${cockpitTaskQueue.length} 件目`;
+
+            // Update profile
+            if (currentWorker) {
+                document.getElementById('profile-name').value = currentWorker.name;
+                document.getElementById('profile-email').value = currentWorker.email;
+            }
+
+            // Update message
+            const messageArea = document.getElementById('message-area');
+            if (task.message) {
+                messageArea.value = task.message;
+            } else {
+                messageArea.value = `${task.company_name}\nご担当者様
+
+突然のご連絡失礼いたします。
+株式会社AIソリューションズの${currentWorker.name}と申します。
+
+貴社のWebサイトを拝見し、事業内容に大変興味を持ちました。
+
+弊社は、企業様の業務効率化を支援するAIツールを提供しております。
+貴社の業務改善にお役に立てるのではないかと考え、ご連絡いたしました。
+
+詳細な資料をお送り可能です。もしご興味をお持ちいただけましたら、ご返信いただけますと幸いです。
+
+よろしくお願いいたします。`;
+            }
+
+            updateCharCount();
+
+            // Enable buttons
+            document.getElementById('auto-submit-btn').disabled = false;
+            document.getElementById('ng-btn').disabled = false;
+            document.getElementById('skip-btn').disabled = false;
+
+            // Hide status on new task load
+            document.getElementById('submit-status').classList.add('hidden');
+        }
+
+        // Open form in new tab
+        function openFormInNewTab() {
+            if (!selectedTask) {
+                alert('タスクが選択されていません');
+                return;
+            }
+
+            // Open company URL in new tab
+            window.open(selectedTask.company_url, '_blank');
+
+            // Show instructions
+            showSubmitStatus('info', 'フォームを開きました。入力確認→reCAPTCHA対応→送信を行ってください');
+            
+            // Highlight complete button
+            const completeBtn = document.getElementById('complete-btn');
+            completeBtn.classList.add('animate-pulse');
+        }
+
+        // Mark task as complete and move to next
+        async function markTaskComplete() {
+            if (!selectedTask) {
+                alert('タスクが選択されていません');
+                return;
+            }
+
+            const message = document.getElementById('message-area').value;
+
+            try {
+                const completeBtn = document.getElementById('complete-btn');
+                completeBtn.disabled = true;
+                completeBtn.classList.remove('animate-pulse');
+                completeBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>処理中...';
+
+                // Call submit API
+                await API.Tasks.submit(selectedTask.id, { message });
+
+                showSubmitStatus('success', '送信完了！+50pt獲得 🎉');
+
+                // Wait 1.5 seconds then load next task
+                setTimeout(async () => {
+                    cockpitCurrentIndex++;
+                    
+                    // Reload tasks to get updated data
+                    await loadTasks();
+                    cockpitTaskQueue = currentTasks.filter(t => t.status === 'pending');
+                    
+                    if (cockpitCurrentIndex < cockpitTaskQueue.length) {
+                        loadCockpitTask(cockpitTaskQueue[cockpitCurrentIndex]);
+                    } else {
+                        // All tasks completed
+                        showSubmitStatus('success', '🎊 全てのタスクが完了しました！お疲れ様でした！');
+                        document.getElementById('cockpit-company-name').textContent = 'タスク完了！';
+                        document.getElementById('open-form-btn').disabled = true;
+                        document.getElementById('complete-btn').disabled = true;
+                        document.getElementById('ng-btn').disabled = true;
+                        document.getElementById('skip-btn').disabled = true;
+                    }
+                    
+                    // Update worker points
+                    if (currentWorker) {
+                        currentWorker = await API.Workers.getById(currentWorker.id);
+                        updateWorkerInfo();
+                    }
+                }, 1500);
+
+            } catch (error) {
+                console.error('Submit error:', error);
+                showSubmitStatus('error', '送信処理に失敗しました: ' + (error.message || ''));
+                const completeBtn = document.getElementById('complete-btn');
+                completeBtn.disabled = false;
+                completeBtn.innerHTML = '<i class="fa-solid fa-check-circle text-xl"></i><span>送信完了 → 次へ</span>';
+            }
+        }
+
+        // Auto submit from cockpit
+        async function autoSubmitFromCockpit() {
+            if (!selectedTask) {
+                alert('タスクが選択されていません');
+                return;
+            }
+
+            const btn = document.getElementById('auto-submit-btn');
+            const statusDiv = document.getElementById('submit-status');
+            const message = document.getElementById('message-area').value;
+
+            // Load noVNC browser view if not already loaded
+            if (!browserViewLoaded) {
+                loadBrowserView();
+            }
+
+            try {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>送信中...';
+
+                // Show status
+                statusDiv.className = 'mt-3 p-3 rounded-lg bg-blue-900/20 border border-blue-500/30 text-sm';
+                statusDiv.innerHTML = '<p class="text-sm text-blue-300"><i class="fa-solid fa-robot mr-2"></i>Playwright起動中...</p>';
+                statusDiv.classList.remove('hidden');
+
+                // Prepare form data
+                const formData = {
+                    company: '株式会社AIソリューションズ',
+                    name: currentWorker.name,
+                    email: currentWorker.email,
+                    phone: '03-1234-5678',
+                    message: message
+                };
+
+                // Call submit API with proper format
+                const result = await API.Tasks.submit(selectedTask.id, {
+                    companyUrl: selectedTask.company_url,
+                    formData: formData
+                });
+
+                // Success
+                statusDiv.className = 'mt-4 p-3 rounded-lg bg-green-900/20 border border-green-500/30';
+                statusDiv.innerHTML = `
+                    <p class="text-sm text-green-300 font-bold"><i class="fa-solid fa-check-circle mr-2"></i>送信完了！</p>
+                    <p class="text-xs text-green-400 mt-1">+50pt獲得しました</p>
+                `;
+
+                // Wait 1.5 seconds then load next task
+                setTimeout(async () => {
+                    cockpitCurrentIndex++;
+                    if (cockpitCurrentIndex < cockpitTaskQueue.length) {
+                        loadCockpitTask(cockpitTaskQueue[cockpitCurrentIndex]);
+                    } else {
+                        statusDiv.className = 'mt-4 p-3 rounded-lg bg-yellow-900/20 border border-yellow-500/30';
+                        statusDiv.innerHTML = '<p class="text-sm text-yellow-300 font-bold"><i class="fa-solid fa-trophy mr-2"></i>全てのタスクが完了しました！お疲れ様でした！</p>';
+                        document.getElementById('auto-submit-btn').disabled = true;
+                        document.getElementById('ng-btn').disabled = true;
+                        document.getElementById('skip-btn').disabled = true;
+                    }
+
+                    // Reload tasks and update worker points
+                    await loadTasks();
+                    if (currentWorker) {
+                        currentWorker = await API.Workers.getById(currentWorker.id);
+                        updateWorkerInfo();
+                    }
+                }, 1500);
+            } catch (error) {
+                console.error('Submit error:', error);
+                statusDiv.className = 'mt-4 p-3 rounded-lg bg-red-900/20 border border-red-500/30';
+                statusDiv.innerHTML = `
+                    <p class="text-sm text-red-300 font-bold"><i class="fa-solid fa-exclamation-triangle mr-2"></i>送信エラー</p>
+                    <p class="text-xs text-red-400 mt-1">${error.message || '送信に失敗しました'}</p>
+                    <button onclick="autoSubmitFromCockpit()" class="mt-2 text-xs text-red-300 hover:text-red-200 underline">再試行</button>
+                `;
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-rocket text-xl"></i><span>自動送信スタート</span>';
+            }
+        }
+
+        // Skip task in cockpit
+        function skipCockpitTask() {
+            if (!selectedTask) {
+                return;
+            }
+
+            API.Tasks.skip(selectedTask.id).then(() => {
+                cockpitCurrentIndex++;
+                if (cockpitCurrentIndex < cockpitTaskQueue.length) {
+                    loadCockpitTask(cockpitTaskQueue[cockpitCurrentIndex]);
+                } else {
+                    const statusDiv = document.getElementById('submit-status');
+                    statusDiv.className = 'mt-4 p-3 rounded-lg bg-yellow-900/20 border border-yellow-500/30';
+                    statusDiv.innerHTML = '<p class="text-sm text-yellow-300 font-bold">全てのタスクが完了しました</p>';
+                    statusDiv.classList.remove('hidden');
+                }
+                loadTasks();
+            }).catch(error => {
+                alert('スキップに失敗: ' + error.message);
+            });
+        }
+
+        // Mark task as NG
+        async function markAsNG() {
+            if (!selectedTask) return;
+
+            if (!confirm('このタスクをNGにしますか？')) return;
+
+            try {
+                await API.Tasks.markNG(selectedTask.id);
+                showSubmitStatus('warning', 'NGとしてマークしました');
+
+                setTimeout(() => {
+                    cockpitCurrentIndex++;
+                    if (cockpitCurrentIndex < cockpitTaskQueue.length) {
+                        loadCockpitTask(cockpitTaskQueue[cockpitCurrentIndex]);
+                    } else {
+                        showSubmitStatus('info', '全てのタスクが完了しました！');
+                    }
+                }, 1500);
+
+                await loadTasks();
+            } catch (error) {
+                console.error('NG error:', error);
+                alert('NGマークに失敗しました');
+            }
+        }
+
+        // Skip current task
+        async function skipCurrentTask() {
+            if (!selectedTask) return;
+
+            if (!confirm('このタスクをスキップしますか？')) return;
+
+            try {
+                await API.Tasks.skip(selectedTask.id);
+                showSubmitStatus('info', 'タスクをスキップしました');
+
+                setTimeout(() => {
+                    cockpitCurrentIndex++;
+                    if (cockpitCurrentIndex < cockpitTaskQueue.length) {
+                        loadCockpitTask(cockpitTaskQueue[cockpitCurrentIndex]);
+                    } else {
+                        showSubmitStatus('info', '全てのタスクが完了しました！');
+                    }
+                }, 1500);
+
+                await loadTasks();
+            } catch (error) {
+                console.error('Skip error:', error);
+                alert('スキップに失敗しました');
+            }
+        }
+
+        // Show submit status
+        function showSubmitStatus(type, message) {
+            const statusDiv = document.getElementById('submit-status');
+            statusDiv.classList.remove('hidden');
+            
+            const colors = {
+                success: 'bg-green-100 text-green-700 border-green-300',
+                error: 'bg-red-100 text-red-700 border-red-300',
+                warning: 'bg-orange-100 text-orange-700 border-orange-300',
+                info: 'bg-blue-100 text-blue-700 border-blue-300'
+            };
+
+            const icons = {
+                success: 'fa-check-circle',
+                error: 'fa-exclamation-circle',
+                warning: 'fa-exclamation-triangle',
+                info: 'fa-info-circle'
+            };
+
+            statusDiv.className = `mt-4 p-3 rounded-lg border-2 ${colors[type]}`;
+            statusDiv.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid ${icons[type]}"></i>
+                    <span class="font-bold text-sm">${message}</span>
+                </div>
+            `;
+
+            setTimeout(() => {
+                statusDiv.classList.add('hidden');
+            }, 5000);
+        }
+
+        // Copy message area
+        function copyMessageArea() {
+            const message = document.getElementById('message-area').value;
+            copyToClipboard(message);
+        }
+
+        // Copy profile field
+        function copyProfileField(fieldId) {
+            const value = document.getElementById(fieldId).value;
+            copyToClipboard(value);
+        }
+
+        // Copy to clipboard
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Show brief feedback
+                const toast = document.createElement('div');
+                toast.className = 'fixed bottom-4 right-4 bg-slate-800 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+                toast.innerHTML = '<i class="fa-solid fa-check mr-2"></i>コピーしました';
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 2000);
+            });
+        }
+
+        // Regenerate message
+        async function regenerateMessage() {
+            if (!selectedTask) return;
+
+            const messageArea = document.getElementById('message-area');
+            const loading = document.getElementById('ai-loading');
+            
+            loading.classList.remove('hidden');
+
+            // Simulate AI generation (replace with actual API call in future)
+            setTimeout(() => {
+                messageArea.value = `${selectedTask.company_name}\nご担当者様
+
+突然のご連絡失礼いたします。
+株式会社AIソリューションズの${currentWorker.name}と申します。
+
+貴社の事業展開に大変興味を持ち、ご連絡させていただきました。
+
+弊社では、最新のAI技術を活用した業務効率化ソリューションを提供しております。
+特に貴社のような企業様において、大きな効果を発揮できると確信しております。
+
+まずは簡単な資料をお送りさせていただきたく存じます。
+ご検討のほど、よろしくお願い申し上げます。`;
+
+                updateCharCount();
+                loading.classList.add('hidden');
+            }, 1500);
+        }
+
+        // Update character count
+        function updateCharCount() {
+            const message = document.getElementById('message-area').value;
+            document.getElementById('char-count').textContent = `文字数: ${message.length}文字`;
+        }
+
+        // Add event listener for message area
+        document.addEventListener('DOMContentLoaded', () => {
+            const messageArea = document.getElementById('message-area');
+            if (messageArea) {
+                messageArea.addEventListener('input', updateCharCount);
+            }
+        });
+
+        // Render stats
+        function renderStats() {
+            if (!currentWorker) {
+                document.getElementById('stats-content').innerHTML = '<p class="text-slate-500">作業者を選択してください</p>';
+                return;
+            }
+
+            const successCount = currentTasks.filter(t => t.status === 'success').length;
+            const totalCount = currentTasks.length;
+            const successRate = totalCount > 0 ? Math.round((successCount / totalCount) * 100) : 0;
+
+            document.getElementById('stats-content').innerHTML = `
+                <div class="grid grid-cols-3 gap-6">
+                    <div class="bg-slate-50 p-6 rounded-xl">
+                        <p class="text-xs text-slate-500 font-bold uppercase mb-2">総タスク数</p>
+                        <p class="text-4xl font-bold text-slate-800">${totalCount}</p>
+                    </div>
+                    <div class="bg-green-50 p-6 rounded-xl">
+                        <p class="text-xs text-green-700 font-bold uppercase mb-2">完了タスク</p>
+                        <p class="text-4xl font-bold text-green-600">${successCount}</p>
+                    </div>
+                    <div class="bg-blue-50 p-6 rounded-xl">
+                        <p class="text-xs text-blue-700 font-bold uppercase mb-2">成功率</p>
+                        <p class="text-4xl font-bold text-blue-600">${successRate}%</p>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-6 rounded-xl">
+                    <p class="text-xs text-slate-500 font-bold uppercase mb-4">ポイント詳細</p>
+                    <div class="flex items-center justify-between">
+                        <span class="text-lg text-slate-700">獲得ポイント</span>
+                        <span class="text-3xl font-bold text-yellow-600">${currentWorker.points} pt</span>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-6 rounded-xl">
+                    <p class="text-xs text-slate-500 font-bold uppercase mb-4">スキル情報</p>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-700">スキルレベル</span>
+                            <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded font-medium">
+                                ${currentWorker.skill_level}
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-700">メールアドレス</span>
+                            <span class="text-slate-600">${currentWorker.email}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function refreshCurrentView() {
+            if (currentWorker) {
+                switchWorker();
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initializeWorkers();
+        });
+    </script>
+</body>
+</html>

@@ -6,6 +6,29 @@ AIによる高度なパーソナライズとHuman-in-the-Loopを組み合わせ�
 
 ---
 
+## � 現在のシステムURL（Phase 2-A本番稼働中）
+
+### ワーカーコンソール（メインUI）
+```
+http://153.126.154.158:8000/simple-console-v2.html
+```
+**用途**: タスク実行、VNC統合、フォーム送信管理  
+**⚠️ 重要**: これが現在のMVP。`simple-console.html`（旧版）ではないので注意！
+
+### 管理コンソール
+```
+http://153.126.154.158:8000/admin-phase2a.html
+```
+**用途**: タスク生成、案件管理、AI文面再生成
+
+### VNC画面
+```
+http://153.126.154.158:6080/vnc.html
+```
+**用途**: フォーム入力の目視確認、reCAPTCHA対応、送信ボタンクリック
+
+---
+
 ## 📋 プロジェクト概要
 
 企業の問い合わせフォームを活用した営業活動において、以下を実現します：
@@ -21,13 +44,13 @@ AIによる高度なパーソナライズとHuman-in-the-Loopを組み合わせ�
 
 ### 🎯 まず最初に読むべきドキュメント
 
+- **[HANDOFF.md](HANDOFF.md)** ⭐ - 新チャット引き継ぎ文書（現在の状態、直近の作業）
 - **[PROJECT_SPEC.md](PROJECT_SPEC.md)** ⭐ - 全体の企画・仕様書（プロジェクトの目的、システム構成、機能仕様）
 - **[DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md)** ⭐ - 開発作業ログ（これまでの経緯、問題と解決方法）
-- **[DEVELOPMENT_SCHEDULE_V2.md](DEVELOPMENT_SCHEDULE_V2.md)** ⭐ - 3フェーズ開発計画（今後の進め方）
 
-### 📖 Phase 1 MVP（現在完成）
+### 📖 Phase 2-A MVP（現在完成）
 
-- **[PHASE1_MVP_GUIDE.md](PHASE1_MVP_GUIDE.md)** - Phase 1完成ガイド（使い方、トラブルシューティング）
+- **[HANDOFF_NEXT_PHASE2.md](HANDOFF_NEXT_PHASE2.md)** - Phase 2-B以降の詳細計画
 - **[HANDOFF_NEXT_CHAT.md](HANDOFF_NEXT_CHAT.md)** - 次回チャット用引き継ぎ（再起動手順、次のステップ）
 
 ### 🚀 VPS環境構築（Phase 2準備）

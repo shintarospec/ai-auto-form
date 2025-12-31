@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phase 2-A 管理画面 - AI AutoForm</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { 
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            min-height: 100vh;
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        
+        /* Tab Styles */
+        .tab-button {
+            padding: 1rem 1.5rem;
+            color: #94a3b8;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        .tab-button:hover {
+            color: #cbd5e1;
+            background: rgba(255,255,255,0.05);
+        }
+        .tab-button.active {
+            color: #60a5fa;
+            border-bottom-color: #60a5fa;
+            background: rgba(96,165,250,0.1);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 min-h-screen">
+    
+    <!-- Header -->
+    <header class="bg-slate-950 border-b border-slate-800 sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <i class="fas fa-rocket text-indigo-500 text-2xl"></i>
+                <h1 class="text-2xl font-bold text-white">Phase 2-A タスク生成管理</h1>
+            </div>
+            <div id="api-status" class="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700">
+                <div class="flex items-center gap-2 whitespace-nowrap">
+                    <div class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
+                    <span class="text-sm text-slate-400">接続確認中...</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-6 py-8 space-y-6">
+        
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-slate-800 rounded-lg p-6 border border-slate-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-slate-400 text-sm">案件数</p>
+                        <p id="stat-projects" class="text-3xl font-bold text-white mt-1">-</p>
+                    </div>
+                    <i class="fas fa-briefcase text-indigo-500 text-3xl"></i>
+                </div>
+            </div>
+            
+            <div class="bg-slate-800 rounded-lg p-6 border border-slate-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-slate-400 text-sm">企業数</p>
+                        <p id="stat-companies" class="text-3xl font-bold text-white mt-1">-</p>
+                    </div>
+                    <i class="fas fa-building text-emerald-500 text-3xl"></i>
+                </div>
+            </div>
+            
+            <div class="bg-slate-800 rounded-lg p-6 border border-slate-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-slate-400 text-sm">総タスク数</p>
+                        <p id="stat-tasks" class="text-3xl font-bold text-white mt-1">-</p>
+                    </div>
+                    <i class="fas fa-list-check text-amber-500 text-3xl"></i>
+                </div>
+            </div>
+            
+            <div class="bg-slate-800 rounded-lg p-6 border border-slate-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-slate-400 text-sm">完了タスク</p>
+                        <p id="stat-completed" class="text-3xl font-bold text-white mt-1">-</p>
+                    </div>
+                    <i class="fas fa-check-circle text-green-500 text-3xl"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- タブナビゲーション -->
+        <div class="mb-8">
+            <div class="flex border-b border-gray-700 bg-slate-800/50 rounded-t-lg overflow-hidden">
+                <button onclick="switchTab('generate')" id="tab-generate" class="tab-button active">
+                    <i class="fas fa-rocket mr-2"></i>タスク生成
+                </button>
+                <button onclick="switchTab('import')" id="tab-import" class="tab-button">
+                    <i class="fas fa-file-upload mr-2"></i>CSV インポート
+                </button>
+                <button onclick="switchTab('product')" id="tab-product" class="tab-button">
+                    <i class="fas fa-plus-circle mr-2"></i>案件登録
+                </button>
+                <button onclick="switchTab('companies')" id="tab-companies" class="tab-button">
+                    <i class="fas fa-building mr-2"></i>企業管理
+                </button>
+                <button onclick="switchTab('products')" id="tab-products" class="tab-button">
+                    <i class="fas fa-briefcase mr-2"></i>案件管理
+                </button>
+                <button onclick="switchTab('tasks')" id="tab-tasks" class="tab-button">
+                    <i class="fas fa-list-check mr-2"></i>タスク一覧
+                </button>
+            </div>
+        </div>
+
+        <!-- タスク生成タブ -->
+        <div id="content-generate" class="tab-content active">
+        <!-- Task Generation Panel -->
+        <div class="bg-slate-800 rounded-lg border border-slate-700">
+            <div class="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-wand-magic-sparkles text-indigo-500"></i>
+                    タスク一括生成
+                </h2>
+            </div>
+            
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <!-- Product Selection -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">
+                            <i class="fas fa-briefcase mr-1"></i>案件・商材選択
+                        </label>
+                        <select id="product-select" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none">
+                            <option value="">読み込み中...</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Company Selection -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">
+                            <i class="fas fa-building mr-1"></i>対象企業
+                        </label>
+                        <select id="company-mode" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none">
+                            <option value="all">全企業（一括）</option>
+                            <option value="select">企業を選択</option>
+                        </select>
+                    </div>
+                    
+                    <!-- AI Toggle -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">
+                            <i class="fas fa-robot mr-1"></i>AI文面カスタマイズ
+                        </label>
+                        <div class="flex items-center h-10">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="ai-toggle" class="sr-only peer" checked>
+                                <div class="w-14 h-7 bg-slate-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-indigo-600"></div>
+                                <span class="ml-3 text-sm font-medium text-slate-300" id="ai-toggle-label">有効</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Company Multi-Select (hidden by default) -->
+                <div id="company-select-panel" class="hidden mb-6">
+                    <label class="block text-sm font-medium text-slate-300 mb-2">
+                        対象企業を選択（複数可）
+                    </label>
+                    <div id="company-checkboxes" class="grid grid-cols-1 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto bg-slate-900 border border-slate-600 rounded-lg p-4">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+                
+                <!-- Generate Button -->
+                <button id="generate-btn" onclick="generateTasks()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/50">
+                    <i class="fas fa-rocket"></i>
+                    <span>タスク生成実行</span>
+                </button>
+                
+                <!-- Result Message -->
+                <div id="generation-result" class="hidden mt-4 p-4 rounded-lg"></div>
+            </div>
+        </div>
+        </div>
+        <!-- タスク生成タブ終了 -->
+
+        <!-- CSVインポートタブ -->
+        <div id="content-import" class="tab-content">
+        <!-- CSV Import Panel -->
+        <div class="bg-slate-800 rounded-lg border border-slate-700">
+            <div class="px-6 py-4 border-b border-slate-700">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-file-csv text-emerald-500"></i>
+                    企業CSVインポート
+                </h2>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2">
+                            <i class="fas fa-file mr-2"></i>CSVファイル
+                        </label>
+                        <input type="file" id="csv-file-input" accept=".csv" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 file:cursor-pointer">
+                    </div>
+                    
+                    <div class="bg-slate-900/50 border border-slate-700 rounded-lg p-4">
+                        <p class="text-sm text-slate-400 mb-2"><i class="fas fa-info-circle mr-2"></i>CSV形式:</p>
+                        <code class="text-xs text-slate-300">name,website_url,form_url,industry,google_place_id,description,employee_count,established_year,capital</code>
+                        <p class="text-xs text-slate-500 mt-2">※ google_place_idが同じ企業は更新、なければ新規作成されます</p>
+                    </div>
+                    
+                    <button onclick="importCSV()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 flex items-center justify-center gap-2">
+                        <i class="fas fa-upload"></i>
+                        <span>CSVインポート</span>
+                    </button>
+                    
+                    <div id="csv-result" class="hidden mt-4 p-4 rounded-lg"></div>
+                </div>
+            </div>
+        </div>
+        </div>
+        <!-- CSVインポートタブ終了 -->
+        <!-- CSVインポートタブ終了 -->
+
+        <!-- 案件登録タブ -->
+        <div id="content-product" class="tab-content">
+        <!-- Product Registration Panel -->
+        <div class="bg-slate-800 rounded-lg border border-slate-700">
+            <div class="px-6 py-4 border-b border-slate-700">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                        <i class="fas fa-briefcase text-indigo-500"></i>
+                        案件・商材登録
+                    </h2>
+                </div>
+                
+                <div class="p-6">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">
+                            <i class="fas fa-tag mr-1"></i>案件名 <span class="text-red-400">*</span>
+                        </label>
+                        <input type="text" id="product-name" placeholder="例: Webサイト制作サービス" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none">
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">
+                            <i class="fas fa-align-left mr-1"></i>説明（オプション）
+                        </label>
+                        <textarea id="product-description" rows="3" placeholder="案件の詳細説明..." class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none resize-none"></textarea>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">
+                            <i class="fas fa-comment-dots mr-1"></i>メッセージテンプレート（オプション）
+                        </label>
+                        <textarea id="product-template" rows="3" placeholder="営業メッセージのテンプレート..." class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none resize-none"></textarea>
+                    </div>
+                    
+                    <!-- 送信者情報セクション -->
+                    <div class="mb-6 p-4 bg-slate-900/50 rounded-lg border border-slate-600">
+                        <h3 class="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                            <i class="fas fa-user-circle text-indigo-400"></i>
+                            送信者情報（案件ごとに設定）
+                        </h3>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">
+                                    <i class="fas fa-user mr-1"></i>送信者名 <span class="text-red-400">*</span>
+                                </label>
+                                <input type="text" id="sender-name" placeholder="例: 山田太郎" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">
+                                    <i class="fas fa-envelope mr-1"></i>送信者メール <span class="text-red-400">*</span>
+                                </label>
+                                <input type="email" id="sender-email" placeholder="例: yamada@example.com" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">
+                                    <i class="fas fa-building mr-1"></i>送信者会社名 <span class="text-red-400">*</span>
+                                </label>
+                                <input type="text" id="sender-company" placeholder="例: 株式会社サンプル" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-slate-300 mb-2">
+                                    <i class="fas fa-phone mr-1"></i>送信者電話番号
+                                </label>
+                                <input type="tel" id="sender-phone" placeholder="例: 03-1234-5678" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button onclick="registerProduct()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition-all duration-200 flex items-center justify-center gap-2">
+                        <i class="fas fa-plus"></i>
+                        <span>案件登録</span>
+                    </button>
+                    
+                    <div id="product-result" class="hidden mt-4 p-4 rounded-lg"></div>
+                </div>
+            </div>
+            
+        </div>
+        </div>
+        <!-- 案件登録タブ終了 -->
+
+        <!-- 企業管理タブ -->
+        <div id="content-companies" class="tab-content">
+        <!-- Companies List Table -->
+        <div class="bg-slate-800 rounded-lg border border-slate-700">
+            <div class="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-building text-emerald-500"></i>
+                    企業一覧
+                </h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-slate-900/50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">企業名</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">業種</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">従業員数</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">google_place_id</th>
+                        </tr>
+                    </thead>
+                    <tbody id="companies-table" class="divide-y divide-slate-700">
+                        <tr>
+                            <td colspan="5" class="px-6 py-8 text-center text-slate-500">
+                                <i class="fas fa-spinner fa-spin mr-2"></i>読み込み中...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        </div>
+        <!-- 企業管理タブ終了 -->
+
+        <!-- 案件管理タブ -->
+        <div id="content-products" class="tab-content">
+        <!-- Products Table -->
+        <div class="bg-slate-800 rounded-lg border border-slate-700">
+            <div class="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-briefcase text-indigo-500"></i>
+                    案件・商材一覧
+                </h2>
+                <button onclick="loadData()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition-colors">
+                    <i class="fas fa-rotate mr-2"></i>再読み込み
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-slate-900/50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">案件・商材名</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">対象業界</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">ステータス</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">作成日</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="projects-table" class="divide-y divide-slate-700">
+                        <tr>
+                            <td colspan="6" class="px-6 py-8 text-center text-slate-500">
+                                <i class="fas fa-spinner fa-spin mr-2"></i>読み込み中...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        </div>
+        <!-- 案件管理タブ終了 -->
+
+        <!-- タスク一覧タブ -->
+        <div id="content-tasks" class="tab-content">
+        <!-- Tasks List Table -->
+        <div class="bg-slate-800 rounded-lg border border-slate-700">
+            <div class="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-list-check text-amber-500"></i>
+                    最近のタスク（最新50件）
+                </h2>
+                <button onclick="loadData()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition-colors">
+                    <i class="fas fa-rotate mr-2"></i>再読み込み
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-slate-900/50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">企業名</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">案件</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">ステータス</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">メッセージ</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">作成日時</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-slate-400 uppercase">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tasks-table" class="divide-y divide-slate-700">
+                        <tr>
+                            <td colspan="7" class="px-6 py-8 text-center text-slate-500">
+                                <i class="fas fa-spinner fa-spin mr-2"></i>読み込み中...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        </div>
+        <!-- タスク一覧タブ終了 -->
+
+    </main>
+
+    <!-- 案件編集モーダル -->
+    <div id="product-edit-modal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
+        <div class="bg-slate-800 rounded-lg border border-slate-700 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
+                <h2 class="text-xl font-bold text-white">案件編集</h2>
+                <button onclick="closeProductEditModal()" class="text-slate-400 hover:text-white">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="edit-product-id">
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">案件名 *</label>
+                    <input type="text" id="edit-product-name" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">説明</label>
+                    <textarea id="edit-product-description" rows="3" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 outline-none resize-none"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">メッセージテンプレート</label>
+                    <textarea id="edit-product-template" rows="4" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 outline-none resize-none"></textarea>
+                </div>
+                
+                <!-- 送信者情報セクション -->
+                <div class="p-4 bg-slate-900/50 rounded-lg border border-slate-600">
+                    <h3 class="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                        <i class="fas fa-user-circle text-indigo-400"></i>
+                        送信者情報
+                    </h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">
+                                <i class="fas fa-user mr-1"></i>送信者名 <span class="text-red-400">*</span>
+                            </label>
+                            <input type="text" id="edit-sender-name" placeholder="例: 山田太郎" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 outline-none">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">
+                                <i class="fas fa-envelope mr-1"></i>送信者メール <span class="text-red-400">*</span>
+                            </label>
+                            <input type="email" id="edit-sender-email" placeholder="例: yamada@example.com" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 outline-none">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">
+                                <i class="fas fa-building mr-1"></i>送信者会社名 <span class="text-red-400">*</span>
+                            </label>
+                            <input type="text" id="edit-sender-company" placeholder="例: 株式会社サンプル" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 outline-none">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">
+                                <i class="fas fa-phone mr-1"></i>送信者電話番号
+                            </label>
+                            <input type="tel" id="edit-sender-phone" placeholder="例: 03-1234-5678" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 outline-none">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex gap-3">
+                    <button onclick="saveProductEdit()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition-all">
+                        <i class="fas fa-save mr-2"></i>保存
+                    </button>
+                    <button onclick="closeProductEditModal()" class="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all">
+                        キャンセル
+                    </button>
+                </div>
+                <div id="product-edit-result" class="hidden mt-4 p-4 rounded-lg"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- タスク編集モーダル -->
+    <div id="task-edit-modal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
+        <div class="bg-slate-800 rounded-lg border border-slate-700 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="px-6 py-4 border-b border-slate-700 flex items-center justify-between">
+                <h2 class="text-xl font-bold text-white">タスク編集</h2>
+                <button onclick="closeTaskEditModal()" class="text-slate-400 hover:text-white">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="edit-task-id">
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <span class="text-slate-400">企業:</span>
+                        <span id="edit-task-company" class="text-white ml-2"></span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400">案件:</span>
+                        <span id="edit-task-product" class="text-white ml-2"></span>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">営業メッセージ</label>
+                    <textarea id="edit-task-message" rows="8" class="w-full px-4 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white focus:border-indigo-500 outline-none resize-none font-mono text-sm"></textarea>
+                    <p class="text-xs text-slate-500 mt-1">
+                        <span id="edit-task-message-length">0</span>文字
+                    </p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="saveTaskEdit()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition-all">
+                        <i class="fas fa-save mr-2"></i>保存
+                    </button>
+                    <button onclick="regenerateTaskMessage()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-6 rounded-lg transition-all">
+                        <i class="fas fa-robot mr-2"></i>AI再生成
+                    </button>
+                    <button onclick="closeTaskEditModal()" class="px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all">
+                        キャンセル
+                    </button>
+                </div>
+                <div id="task-edit-result" class="hidden mt-4 p-4 rounded-lg"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://153.126.154.158:5001/api/simple';
+        
+        let productsData = [];
+        let companiesData = [];
+        let tasksData = [];
+
+        // Tab Switching Function
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Remove active from all buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(`content-${tabName}`).classList.add('active');
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            // AI Toggle
+            document.getElementById('ai-toggle').addEventListener('change', (e) => {
+                document.getElementById('ai-toggle-label').textContent = e.target.checked ? '有効' : '無効';
+            });
+            
+            // Company Mode Selection
+            document.getElementById('company-mode').addEventListener('change', (e) => {
+                const panel = document.getElementById('company-select-panel');
+                panel.classList.toggle('hidden', e.target.value === 'all');
+            });
+        }
+
+        async function loadData() {
+            try {
+                // Fetch all data
+                const [products, companies, tasks] = await Promise.all([
+                    fetch(`${API_BASE}/products`).then(r => r.json()),
+                    fetch(`${API_BASE}/companies`).then(r => r.json()),
+                    fetch(`${API_BASE}/tasks`).then(r => r.json())
+                ]);
+                
+                productsData = products;
+                companiesData = companies;
+                tasksData = tasks;
+                
+                updateStats();
+                renderProducts();
+                renderCompanies();
+                renderTasks();
+                populateProductSelect();
+                populateCompanyCheckboxes();
+                updateAPIStatus(true);
+            } catch (error) {
+                console.error('Failed to load data:', error);
+                updateAPIStatus(false);
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('stat-projects').textContent = productsData.length;
+            document.getElementById('stat-companies').textContent = companiesData.length;
+            document.getElementById('stat-tasks').textContent = tasksData.length;
+            
+            const completed = tasksData.filter(t => t.status === 'completed').length;
+            document.getElementById('stat-completed').textContent = completed;
+        }
+
+        function updateAPIStatus(connected) {
+            const status = document.getElementById('api-status');
+            const container = status.querySelector('div');
+            const dot = container.querySelector('div');
+            const text = status.querySelector('span');
+            
+            // Ensure container maintains flex layout
+            container.className = 'flex items-center gap-2 whitespace-nowrap';
+            
+            if (connected) {
+                dot.className = 'w-2 h-2 rounded-full bg-green-500';
+                text.textContent = 'API接続中';
+            } else {
+                dot.className = 'w-2 h-2 rounded-full bg-red-500';
+                text.textContent = 'API接続エラー';
+            }
+        }
+
+        function renderProducts() {
+            const tbody = document.getElementById('projects-table');
+            
+            if (productsData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-slate-500">案件がありません</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = productsData.map(p => `
+                <tr class="hover:bg-slate-700/50 transition-colors">
+                    <td class="px-6 py-4 text-sm">${p.id}</td>
+                    <td class="px-6 py-4 text-sm font-medium">${p.name}</td>
+                    <td class="px-6 py-4 text-sm">
+                        <span class="px-2 py-1 bg-indigo-900/50 text-indigo-300 rounded text-xs">${p.industry || 'すべて'}</span>
+                    </td>
+                    <td class="px-6 py-4 text-sm">
+                        <span class="px-2 py-1 ${getStatusBadge('active')} rounded text-xs">アクティブ</span>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-slate-400">${formatDate(p.created_at)}</td>
+                    <td class="px-6 py-4 text-sm">
+                        <button onclick="openProductEditModal(${p.id})" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs transition-all">
+                            <i class="fas fa-edit mr-1"></i>編集
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderCompanies() {
+            const tbody = document.getElementById('companies-table');
+            
+            if (companiesData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-slate-500">企業がありません</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = companiesData.map(c => `
+                <tr class="hover:bg-slate-700/50 transition-colors">
+                    <td class="px-6 py-4 text-sm">${c.id}</td>
+                    <td class="px-6 py-4 text-sm font-medium">${c.name || '-'}</td>
+                    <td class="px-6 py-4 text-sm text-slate-400">${c.industry || '-'}</td>
+                    <td class="px-6 py-4 text-sm text-slate-400">${c.employee_count ? c.employee_count + '名' : '-'}</td>
+                    <td class="px-6 py-4 text-sm font-mono text-xs text-slate-500">${c.google_place_id ? c.google_place_id.substring(0, 20) + '...' : '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderTasks() {
+            const tbody = document.getElementById('tasks-table');
+            const recentTasks = tasksData.slice().sort((a, b) => b.id - a.id).slice(0, 50);
+            
+            if (recentTasks.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-slate-500">タスクがありません</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = recentTasks.map(t => {
+                const message = t.form_data?.message || '';
+                const truncated = message.length > 50 ? message.substring(0, 50) + '...' : message;
+                const productName = productsData.find(p => p.id === t.product_id)?.name || '-';
+                
+                return `
+                <tr class="hover:bg-slate-700/50 transition-colors">
+                    <td class="px-6 py-4 text-sm">${t.id}</td>
+                    <td class="px-6 py-4 text-sm font-medium">${t.company?.name || '-'}</td>
+                    <td class="px-6 py-4 text-sm text-slate-400">${productName}</td>
+                    <td class="px-6 py-4 text-sm">
+                        <span class="px-2 py-1 ${getStatusBadge(t.status)} rounded text-xs">${getStatusText(t.status)}</span>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-slate-400 max-w-md truncate" title="${message}">
+                        ${truncated || '-'}
+                        ${message.length > 0 ? `<span class="ml-1 text-xs text-slate-500">(${message.length}文字)</span>` : ''}
+                    </td>
+                    <td class="px-6 py-4 text-sm text-slate-400">${formatDate(t.created_at)}</td>
+                    <td class="px-6 py-4 text-sm">
+                        <button onclick="openTaskEditModal(${t.id})" class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs transition-all">
+                            <i class="fas fa-edit mr-1"></i>編集
+                        </button>
+                    </td>
+                </tr>
+            `}).join('');
+        }
+
+        function populateProductSelect() {
+            const select = document.getElementById('product-select');
+            
+            if (productsData.length === 0) {
+                select.innerHTML = '<option value="">案件がありません</option>';
+                return;
+            }
+            
+            select.innerHTML = '<option value="">案件を選択...</option>' +
+                productsData.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        }
+
+        function populateCompanyCheckboxes() {
+            const container = document.getElementById('company-checkboxes');
+            
+            if (companiesData.length === 0) {
+                container.innerHTML = '<p class="text-slate-500 text-sm">企業データがありません</p>';
+                return;
+            }
+            
+            container.innerHTML = companiesData.map(c => `
+                <label class="flex items-center gap-2 p-2 hover:bg-slate-800 rounded cursor-pointer">
+                    <input type="checkbox" value="${c.id}" class="company-checkbox w-4 h-4 text-indigo-600 bg-slate-700 border-slate-600 rounded focus:ring-indigo-500">
+                    <span class="text-sm">${c.name}</span>
+                </label>
+            `).join('');
+        }
+
+        async function generateTasks() {
+            const productId = document.getElementById('product-select').value;
+            const companyMode = document.getElementById('company-mode').value;
+            const useAI = document.getElementById('ai-toggle').checked;
+            const resultDiv = document.getElementById('generation-result');
+            const generateBtn = document.getElementById('generate-btn');
+            
+            // Validation
+            if (!productId) {
+                showResult('error', '案件を選択してください');
+                return;
+            }
+            
+            let companyIds;
+            if (companyMode === 'all') {
+                companyIds = 'all';
+            } else {
+                const checkboxes = document.querySelectorAll('.company-checkbox:checked');
+                if (checkboxes.length === 0) {
+                    showResult('error', '企業を選択してください');
+                    return;
+                }
+                companyIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+            }
+            
+            // Disable button
+            generateBtn.disabled = true;
+            generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>生成中...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/tasks/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        product_id: parseInt(productId),
+                        company_ids: companyIds,
+                        use_ai: useAI
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showResult('success', 
+                        `✅ タスク生成成功！<br>
+                        案件: ${result.product_name}<br>
+                        生成数: ${result.tasks_created}件<br>
+                        スキップ: ${result.tasks_skipped || 0}件（重複）<br>
+                        対象企業: ${result.companies_count}社<br>
+                        AI文面カスタマイズ: ${result.ai_enabled ? '有効' : '無効'}`
+                    );
+                    
+                    // Reload data
+                    setTimeout(() => loadData(), 1000);
+                } else {
+                    showResult('error', `❌ エラー: ${result.error || '不明なエラー'}`);
+                }
+            } catch (error) {
+                showResult('error', `❌ 通信エラー: ${error.message}`);
+            } finally {
+                // Re-enable button
+                generateBtn.disabled = false;
+                generateBtn.innerHTML = '<i class="fas fa-rocket"></i><span>タスク生成実行</span>';
+            }
+        }
+
+        function showResult(type, message) {
+            const resultDiv = document.getElementById('generation-result');
+            resultDiv.className = `mt-4 p-4 rounded-lg ${type === 'success' ? 'bg-green-900/30 border border-green-700 text-green-300' : 'bg-red-900/30 border border-red-700 text-red-300'}`;
+            resultDiv.innerHTML = message;
+            resultDiv.classList.remove('hidden');
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                resultDiv.classList.add('hidden');
+            }, 5000);
+        }
+
+        function getStatusBadge(status) {
+            const badges = {
+                'active': 'bg-green-900/50 text-green-300',
+                'inactive': 'bg-slate-700 text-slate-400',
+                'pending': 'bg-yellow-900/50 text-yellow-300',
+                'in_progress': 'bg-blue-900/50 text-blue-300',
+                'completed': 'bg-green-900/50 text-green-300',
+                'failed': 'bg-red-900/50 text-red-300'
+            };
+            return badges[status] || 'bg-slate-700 text-slate-400';
+        }
+
+        function getStatusText(status) {
+            const texts = {
+                'active': 'アクティブ',
+                'inactive': '非アクティブ',
+                'pending': '待機中',
+                'in_progress': '実行中',
+                'completed': '完了',
+                'failed': '失敗'
+            };
+            return texts[status] || status;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return date.toLocaleString('ja-JP', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        async function importCSV() {
+            const fileInput = document.getElementById('csv-file-input');
+            const resultDiv = document.getElementById('csv-result');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                showResultDiv(resultDiv, 'error', 'CSVファイルを選択してください');
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch(`${API_BASE}/companies/import-csv`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    let message = `✅ インポート完了！<br>
+                        新規作成: ${result.created}件<br>
+                        更新: ${result.updated}件<br>
+                        スキップ: ${result.skipped}件`;
+                    
+                    if (result.errors && result.errors.length > 0) {
+                        message += `<br><br>⚠️ エラー (最初の10件):<br>${result.errors.join('<br>')}`;
+                    }
+                    
+                    showResultDiv(resultDiv, 'success', message);
+                    
+                    // データ再読み込み
+                    setTimeout(() => loadData(), 1000);
+                    
+                    // ファイル入力をクリア
+                    fileInput.value = '';
+                } else {
+                    showResultDiv(resultDiv, 'error', `❌ エラー: ${result.error || '不明なエラー'}`);
+                }
+            } catch (error) {
+                showResultDiv(resultDiv, 'error', `❌ 通信エラー: ${error.message}`);
+            }
+        }
+
+        async function registerProduct() {
+            const name = document.getElementById('product-name').value.trim();
+            const description = document.getElementById('product-description').value.trim();
+            const template = document.getElementById('product-template').value.trim();
+            const senderName = document.getElementById('sender-name').value.trim();
+            const senderEmail = document.getElementById('sender-email').value.trim();
+            const senderCompany = document.getElementById('sender-company').value.trim();
+            const senderPhone = document.getElementById('sender-phone').value.trim();
+            const resultDiv = document.getElementById('product-result');
+            
+            // バリデーション
+            if (!name) {
+                showResultDiv(resultDiv, 'error', '案件名を入力してください');
+                return;
+            }
+            if (!senderName) {
+                showResultDiv(resultDiv, 'error', '送信者名を入力してください');
+                return;
+            }
+            if (!senderEmail) {
+                showResultDiv(resultDiv, 'error', '送信者メールアドレスを入力してください');
+                return;
+            }
+            if (!senderCompany) {
+                showResultDiv(resultDiv, 'error', '送信者会社名を入力してください');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/products`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        description: description || null,
+                        message_template: template || null,
+                        sender_name: senderName,
+                        sender_email: senderEmail,
+                        sender_company: senderCompany,
+                        sender_phone: senderPhone || null
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showResultDiv(resultDiv, 'success', `✅ 案件登録成功！<br>案件名: ${result.product.name}<br>送信者: ${senderName} (${senderCompany})`);
+                    
+                    // フォームクリア
+                    document.getElementById('product-name').value = '';
+                    document.getElementById('product-description').value = '';
+                    document.getElementById('product-template').value = '';
+                    document.getElementById('sender-name').value = '';
+                    document.getElementById('sender-email').value = '';
+                    document.getElementById('sender-company').value = '';
+                    document.getElementById('sender-phone').value = '';
+                    
+                    // データ再読み込み
+                    setTimeout(() => loadData(), 1000);
+                } else {
+                    showResultDiv(resultDiv, 'error', `❌ エラー: ${result.error || '不明なエラー'}`);
+                }
+            } catch (error) {
+                showResultDiv(resultDiv, 'error', `❌ 通信エラー: ${error.message}`);
+            }
+        }
+
+        function showResultDiv(div, type, message) {
+            div.className = `mt-4 p-4 rounded-lg ${type === 'success' ? 'bg-green-900/30 border border-green-700 text-green-300' : 'bg-red-900/30 border border-red-700 text-red-300'}`;
+            div.innerHTML = message;
+            div.classList.remove('hidden');
+            
+            // Auto-hide after 8 seconds
+            setTimeout(() => {
+                div.classList.add('hidden');
+            }, 8000);
+        }
+
+        // 案件編集モーダル
+        function openProductEditModal(productId) {
+            const product = productsData.find(p => p.id === productId);
+            if (!product) return;
+            
+            document.getElementById('edit-product-id').value = product.id;
+            document.getElementById('edit-product-name').value = product.name;
+            document.getElementById('edit-product-description').value = product.description || '';
+            document.getElementById('edit-product-template').value = product.message_template || '';
+            
+            // 送信者情報を設定
+            document.getElementById('edit-sender-name').value = product.sender_name || '';
+            document.getElementById('edit-sender-email').value = product.sender_email || '';
+            document.getElementById('edit-sender-company').value = product.sender_company || '';
+            document.getElementById('edit-sender-phone').value = product.sender_phone || '';
+            
+            document.getElementById('product-edit-modal').classList.remove('hidden');
+        }
+
+        function closeProductEditModal() {
+            document.getElementById('product-edit-modal').classList.add('hidden');
+            document.getElementById('product-edit-result').classList.add('hidden');
+        }
+
+        async function saveProductEdit() {
+            const productId = document.getElementById('edit-product-id').value;
+            const name = document.getElementById('edit-product-name').value.trim();
+            const description = document.getElementById('edit-product-description').value.trim();
+            const template = document.getElementById('edit-product-template').value.trim();
+            const senderName = document.getElementById('edit-sender-name').value.trim();
+            const senderEmail = document.getElementById('edit-sender-email').value.trim();
+            const senderCompany = document.getElementById('edit-sender-company').value.trim();
+            const senderPhone = document.getElementById('edit-sender-phone').value.trim();
+            const resultDiv = document.getElementById('product-edit-result');
+            
+            // バリデーション
+            if (!name) {
+                showResultDiv(resultDiv, 'error', '案件名を入力してください');
+                return;
+            }
+            if (!senderName) {
+                showResultDiv(resultDiv, 'error', '送信者名を入力してください');
+                return;
+            }
+            if (!senderEmail) {
+                showResultDiv(resultDiv, 'error', '送信者メールアドレスを入力してください');
+                return;
+            }
+            if (!senderCompany) {
+                showResultDiv(resultDiv, 'error', '送信者会社名を入力してください');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/products/${productId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        description: description || null,
+                        message_template: template || null,
+                        sender_name: senderName,
+                        sender_email: senderEmail,
+                        sender_company: senderCompany,
+                        sender_phone: senderPhone || null
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showResultDiv(resultDiv, 'success', `✅ ${result.message}`);
+                    setTimeout(() => {
+                        closeProductEditModal();
+                        loadData();
+                    }, 1500);
+                } else {
+                    showResultDiv(resultDiv, 'error', `❌ エラー: ${result.error}`);
+                }
+            } catch (error) {
+                showResultDiv(resultDiv, 'error', `❌ 通信エラー: ${error.message}`);
+            }
+        }
+
+        // タスク編集モーダル
+        function openTaskEditModal(taskId) {
+            const task = tasksData.find(t => t.id === taskId);
+            if (!task) return;
+            
+            const product = productsData.find(p => p.id === task.product_id);
+            
+            document.getElementById('edit-task-id').value = task.id;
+            document.getElementById('edit-task-company').textContent = task.company?.name || '-';
+            document.getElementById('edit-task-product').textContent = product?.name || '-';
+            
+            const message = task.form_data?.message || '';
+            document.getElementById('edit-task-message').value = message;
+            document.getElementById('edit-task-message-length').textContent = message.length;
+            
+            // 文字数カウント
+            document.getElementById('edit-task-message').addEventListener('input', (e) => {
+                document.getElementById('edit-task-message-length').textContent = e.target.value.length;
+            });
+            
+            document.getElementById('task-edit-modal').classList.remove('hidden');
+        }
+
+        function closeTaskEditModal() {
+            document.getElementById('task-edit-modal').classList.add('hidden');
+            document.getElementById('task-edit-result').classList.add('hidden');
+        }
+
+        async function saveTaskEdit() {
+            const taskId = document.getElementById('edit-task-id').value;
+            const message = document.getElementById('edit-task-message').value.trim();
+            const resultDiv = document.getElementById('task-edit-result');
+            
+            try {
+                const response = await fetch(`${API_BASE}/tasks/${taskId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showResultDiv(resultDiv, 'success', `✅ ${result.message}`);
+                    setTimeout(() => {
+                        closeTaskEditModal();
+                        loadData();
+                    }, 1500);
+                } else {
+                    showResultDiv(resultDiv, 'error', `❌ エラー: ${result.error}`);
+                }
+            } catch (error) {
+                showResultDiv(resultDiv, 'error', `❌ 通信エラー: ${error.message}`);
+            }
+        }
+
+        async function regenerateTaskMessage() {
+            const taskId = document.getElementById('edit-task-id').value;
+            const resultDiv = document.getElementById('task-edit-result');
+            
+            showResultDiv(resultDiv, 'success', '🤖 AI生成中...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/tasks/${taskId}/regenerate-message`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                console.log('[AI再生成] Response:', {
+                    ok: response.ok,
+                    messageLength: result.message ? result.message.length : 0,
+                    message: result.message
+                });
+                
+                if (response.ok) {
+                    const message = result.message || '';
+                    document.getElementById('edit-task-message').value = message;
+                    document.getElementById('edit-task-message-length').textContent = message.length;
+                    showResultDiv(resultDiv, 'success', `✅ ${result.info}<br>新しいメッセージ: ${message.length}文字`);
+                } else {
+                    showResultDiv(resultDiv, 'error', `❌ エラー: ${result.error}`);
+                }
+            } catch (error) {
+                console.error('[AI再生成] Error:', error);
+                showResultDiv(resultDiv, 'error', `❌ 通信エラー: ${error.message}`);
+            }
+        }
+    </script>
+
+</body>
+</html>

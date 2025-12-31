@@ -220,6 +220,33 @@ git push
 
 ---
 
+## 📝 更新履歴
+
+### 2025-12-31: Phase 2-A マイナーアップデート
+
+**概要**: 案件ごとの送信者情報管理機能を追加
+
+**Skills更新判断**: ✅ **更新不要**  
+- 理由: アーキテクチャ変更なし、既存モデルの拡張のみ
+- データベーススキーマに4カラム追加（sender_name, sender_email, sender_company, sender_phone）
+- 既存の`simple_*`テーブル構造は維持
+- MVP戦略（Phase 1→Phase 2-A）の範囲内の改善
+
+**変更内容**:
+- Productモデル拡張（送信者情報カラム追加）
+- API追加（POST /api/simple/products）
+- API更新（PUT /api/simple/products/<id>）
+- Admin UI拡張（案件登録・編集フォーム）
+
+**影響**: なし（既存機能を拡張、破壊的変更なし）
+
+**関連ドキュメント更新**:
+- ✅ HANDOFF.md（作業ログ追加）
+- ✅ CHANGELOG.md（v2.1.0追加）
+- ✅ PROJECT_SPEC.md（データベーススキーマ更新）
+
+---
+
 ## 📚 参考リンク
 
 - [GitHub Copilot Instructions 公式ドキュメント](https://docs.github.com/en/copilot/customizing-copilot/adding-custom-instructions-for-github-copilot)

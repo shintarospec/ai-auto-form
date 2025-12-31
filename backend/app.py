@@ -1,10 +1,13 @@
 """
 AI AutoForm - Flask API Server
-Phase 1: MVP Version
+Phase 4: Database Integration
 """
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 import os
 
@@ -16,9 +19,21 @@ app = Flask(__name__)
 
 # Configuration
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key')
 
 # CORS Configuration（開発環境用 - すべて許可）
 CORS(app)
+
+# JWT
+jwt = JWTManager(app)
+
+# Rate Limiter
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri=os.getenv('RATELIMIT_STORAGE_URL', 'memory://')
+)
 
 # Initialize database
 from backend.database import init_db
@@ -30,36 +45,12 @@ from backend.api.simple_api import simple_bp
 app.register_blueprint(simple_bp)  # Phase 1 MVP API
 
 # ========================================
-# Root Endpoint
+# Static Files (Screenshots)
 # ========================================
-@app.route('/')
-def index():
-    """API情報を返す"""
-    return jsonify({
-        'service': 'AI AutoForm API',
-        'version': '1.0.0 MVP',
-        'status': 'running',
-        'endpoints': {
-            'health': '/api/health',
-            'tasks': '/api/simple/tasks',
-            'task_detail': '/api/simple/tasks/<id>',
-            'execute_task': 'POST /api/simple/tasks/<id>/execute',
-            'complete_task': 'POST /api/simple/tasks/<id>/complete'
-        }
-    })
-
-# ========================================
-# Static Files (Screenshots & HTML)
-# ========================================
-@app.route('/simple-console.html')
-def serve_simple_console():
-    """Simple Console UIを配信"""
-    return send_from_directory('/opt/ai-auto-form', 'simple-console.html')
-
 @app.route('/screenshots/<path:filename>')
 def serve_screenshot(filename):
     """スクリーンショット画像を配信"""
-    screenshots_dir = '/opt/ai-auto-form/screenshots'
+    screenshots_dir = '/workspaces/ai-auto-form/screenshots'
     return send_from_directory(screenshots_dir, filename)
 
 # ========================================

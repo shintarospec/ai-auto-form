@@ -42,6 +42,13 @@ class Product(Base):
     name = Column(String(200), nullable=False)
     description = Column(Text)
     message_template = Column(Text)  # メッセージテンプレート
+    
+    # 送信者情報（案件ごとに異なる）
+    sender_name = Column(String(100))  # 送信者名
+    sender_email = Column(String(200))  # 送信者メールアドレス
+    sender_company = Column(String(200))  # 送信者会社名
+    sender_phone = Column(String(50))  # 送信者電話番号
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     
     tasks = relationship('Task', back_populates='product')
@@ -51,7 +58,11 @@ class Product(Base):
             'id': self.id,
             'name': self.name,
             'description': self.description,
-            'message_template': self.message_template
+            'message_template': self.message_template,
+            'sender_name': self.sender_name,
+            'sender_email': self.sender_email,
+            'sender_company': self.sender_company,
+            'sender_phone': self.sender_phone
         }
 
 

@@ -1,25 +1,22 @@
 # AI AutoForm - 新チャット引き継ぎ文書 📋
 
-**最終更新**: 2025年12月25日  
-**プロジェクト状態**: Phase 2-3 VNC統合完成、自動ペースト機能実装済み
+**最終更新**: 2025年12月31日  
+**プロジェクト状態**: Phase 2-A完成、VPS本番稼働中
 
 ---
 
-## 🎯 最新の完成機能（2025-12-25）
+## 🚨 重要：現在のUI（必読）
 
-### ✅ VNC自動ペースト機能
-- **xdotool + xsel**: VNC内のフォーカス中フィールドに自動入力
-- **ワンクリック操作**: 「⚡ 自動ペースト」ボタンで完結
-- **UI簡略化**: VNCコピーボタンと青パネル削除
+**メインUI（開発・テスト用）**:
+- **URL**: http://153.126.154.158:8000/simple-console-v2.html
+- **用途**: ワーカーコンソール（タスク実行・VNC統合）
+- **注意**: このファイルが現在のMVP。他のHTMLファイルではない！
 
-### ✅ タスク管理機能
-- **リセット機能**: 全タスクを未処理に一括リセット
-- **手動リフレッシュ**: タスクリストを即座に更新
-- **自動更新**: 3秒ごとのステータス自動更新
+**管理UI**:
+- **URL**: http://153.126.154.158:8000/admin-phase2a.html
+- **用途**: 管理者コンソール（タスク生成・案件管理・AI再生成）
 
-### ✅ 誤操作防止
-- **Enterキー防止**: input要素でのEnter送信を自動ブロック
-- **textarea除外**: メッセージ欄では改行可能
+**⚠️ これらのURLを忘れずに記録すること！**
 
 ---
 
@@ -36,163 +33,34 @@
 
 ---
 
-## ✅ Phase 1 MVP完成状況
+## ✅ Phase 2-A完成状況（最新）
 
-### 1. データベース層（完成✅）
-- **PostgreSQL 16**: Docker稼働中（`ai-autoform-db`）
-- **テーブル**: 3テーブル（simple_companies, simple_products, simple_tasks）
-- **テストデータ**: 投入済み
-  - 企業5社（株式会社テストカンパニー等）
-  - 商品2件（Webサイト制作、SEOコンサルティング）
-  - タスク10件
-- **確認コマンド**: 
-  ```bash
-  docker exec -it ai-autoform-db psql -U postgres -d ai_autoform -c "SELECT * FROM simple_companies;"
-  ```
-
-### 2. API層（動作中✅）
-- **Flask 3.0.0**: VPSポート5001で稼働中
-- **VPS起動**: `bash restart-flask-vps.sh` または `bash start-flask.sh`
-- **新規APIエンドポイント**:
-  - `POST /api/simple/vnc/send-data` - VNCクリップボードに送信
-  - `POST /api/simple/vnc/auto-paste` - 自動ペースト実行
-  - `POST /api/simple/tasks/reset` - 全タスクリセット
-- **既存エンドポイント**:
-  - `GET /api/simple/tasks` - タスク一覧
-  - `GET /api/simple/tasks/<id>` - タスク詳細
-  - `POST /api/simple/tasks/<id>/execute` - 自動入力実行
-  - `POST /api/simple/tasks/<id>/complete` - 完了マーク
+### 1. VPS本番環境（稼働中✅）
+- **VPS**: 153.126.154.158（さくらVPS、Ubuntu 24.04）
+- **アクセス**: `ssh ubuntu@153.126.154.158`（root@ではない）
+- **Flask**: ポート5001（PID確認: `ps aux | grep app.py`）
+- **HTTP Server**: ポート8000（simple-console-v2.html配信）
+- **VNC**: ポート6080（noVNC Web UI）
 
 ### 3. フロントエンド層（動作中✅）
-- **Simple Console**: `simple-console.html`（VPS上で動作）
-- **アクセス**: `http://153.126.154.158:8000/simple-console.html`
-- **HTTPサーバー**: VPSポート8000
-- **新機能**:
-  - ⚡ 自動ペーストボタン（各フィールド）
-  - 🔄 全タスクリセットボタン（ヘッダー）
-  - 🔄 更新ボタン（ヘッダー）
-  - 読みやすいフォームデータ表示
-- **旧機能削除**:
-  - ❌ VNCコピーボタン削除
-  - ❌ 青パネル削除
-
-### 4. Playwright + VNC層（動作中✅）
-- **VNC環境**: Xvfb :99 + x11vnc + noVNC
-- **VNC起動**: `bash start-vnc.sh`
-- **noVNCアクセス**: `http://153.126.154.158:6080/vnc.html`
-- **自動ペースト**: xdotool + xsel
-- **誤送信防止**: Enterキー自動ブロック
-- **設定**: `headless=False, DISPLAY=:99`
-
-### 5. VPS環境（稼働中✅）
-- **VPSアドレス**: 153.126.154.158
-- **ユーザー**: `ubuntu@` （root@ではない）
-- **プロジェクトパス**: `/opt/ai-auto-form`
-- **必須ツール**: xsel, xdotool（インストール済み）
-- **Flask再起動**: `bash restart-flask-vps.sh`
-
----
-
-## 🔧 Flask再起動の確実な手順
-
-**問題**: コード変更後にFlaskを再起動しても、Pythonキャッシュやインポート済みモジュールにより変更が反映されないことがある
-
-**解決策**: 以下の確実な手順を必ず実行
-
-```bash
-# 1. コード編集（ローカル）
-# automation_service.py等を編集
-
-# 2. VPSに転送
-scp backend/services/automation_service.py ubuntu@153.126.154.158:/opt/ai-auto-form/backend/services/
-
-# 3. Flask再起動（確実な方法）
-bash restart-flask-vps.sh
-
-# または手動の場合：
-ssh ubuntu@153.126.154.158 '
-  pkill -9 -f "python.*app.py"
-  cd /opt/ai-auto-form
-  find . -name "*.pyc" -delete
-  find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-  bash start-flask.sh
-'
-
-# 4. タスク実行して検証
-# simple-console.htmlからタスク実行
-# VNC画面で変更が反映されているか確認
-```
-
----
-
-## 🔄 環境の起動手順（VPS）
-
-### VNCサーバー起動:
-```bash
-ssh ubuntu@153.126.154.158
-cd /opt/ai-auto-form
-bash start-vnc.sh
-```
-
-### Flaskサーバー起動:
-```bash
-ssh ubuntu@153.126.154.158
-cd /opt/ai-auto-form
-bash start-flask.sh
-```
-
-### アクセス:
-- **simple-console**: http://153.126.154.158:8000/simple-console.html
-- **noVNC**: http://153.126.154.158:6080/vnc.html
-
----
-
-## 🎨 自動ペースト機能の使い方
-
-### 基本フロー
-1. **タスク実行**: 「▶ 自動入力＋送信」ボタンをクリック
-2. **VNC画面確認**: フォームが自動入力される
-3. **フィールド選択**: VNC画面で修正したいフィールドをクリック
-4. **自動ペースト**: コンソール画面で「⚡ 自動ペースト」ボタンをクリック
-5. **自動入力完了**: VNC画面のフォーカス中フィールドに自動入力される
-
-### 技術仕様
-- **xsel**: VNCクリップボードへの書き込み（DISPLAY=:99）
-- **xdotool**: Ctrl+Vキーストロークの自動送信
-- **イベント駆動**: ボタンクリックでAPI呼び出し → バックエンドで実行
-
-### トラブルシューティング
-- **ペーストされない**: VNC画面でフィールドをクリックしてフォーカスを確認
-- **エラー表示**: xsel/xdotoolがインストールされているか確認
+- **Simple Console**: `simple-console.html`（Phase 1専用UI）
+- **起動中のHTTPサーバー**: ポート8000
   ```bash
-  ssh ubuntu@153.126.154.158 'which xsel && which xdotool'
+  cd /workspaces/ai-auto-form
+  lsof -ti:8000 | xargs kill -9 2>/dev/null
+  nohup python -m http.server 8000 > http-server.log 2>&1 &
   ```
+- **アクセス**: Codespacesのポート8000を「Public」に設定後、`simple-console.html`を開く
+- **機能**: 統計情報、タスク一覧、詳細表示、自動入力実行、完了マーク
+
+### 4. Playwright層（動作中✅）
+- **ファイル**: `backend/services/automation_service.py`
+- **現在の設定**: `headless=True`（画面非表示モード）
+- **動作確認済み**: test-contact-form.htmlに自動入力、スクリーンショット保存
 
 ---
 
-## 📝 次のセッションへの引き継ぎ事項
-
-### 完了した作業（2025-12-25）
-- ✅ VNC自動ペースト機能実装
-- ✅ UI簡略化（VNCコピー・青パネル削除）
-- ✅ タスクリセット機能
-- ✅ 手動リフレッシュ機能
-- ✅ Enterキー誤送信防止
-- ✅ Flask再起動手順確立
-
-### 次の作業（UIデザイン調整）
-- 🎨 UIデザイン調整に着手予定
-- 配色、レイアウト、フォント等の改善
-- ユーザビリティ向上
-
-### 重要な注意事項
-- **Flask再起動**: 必ず`restart-flask-vps.sh`を使用
-- **VPS接続**: `ubuntu@153.126.154.158`（root@ではない）
-- **MVP戦略厳守**: 既存動作コードを壊さない
-
----
-
-## 🔄 環境の起動手順（旧：ローカル開発用）
+## 🔄 環境の起動手順
 
 ### 1回目（コンテナ起動）:
 ```bash
@@ -220,51 +88,6 @@ nohup python -m http.server 8000 > http-server.log 2>&1 &
 # 動作確認
 curl http://localhost:5001/api/simple/tasks | jq
 ```
-
----
-
-## 🔧 Flask再起動の確実な手順（重要）
-
-### 問題
-コード変更後にFlaskを再起動しても、Pythonキャッシュやインポート済みモジュールにより変更が反映されないことがある。
-
-### 解決策：確実な手順
-
-```bash
-# 1. コード編集（ローカル）
-# automation_service.py等を編集
-
-# 2. VPSに転送
-scp backend/services/automation_service.py ubuntu@153.126.154.158:/opt/ai-auto-form/backend/services/
-
-# 3. Flask再起動スクリプト実行
-bash restart-flask-vps.sh
-
-# または手動の場合：
-ssh ubuntu@153.126.154.158 '
-  pkill -9 -f "python.*app.py"
-  cd /opt/ai-auto-form
-  find . -name "*.pyc" -delete
-  find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-  bash start-flask.sh
-'
-
-# 4. 検証
-# - simple-console.htmlからタスク実行
-# - debug_screenshots/panel_content_*.txt でタイムスタンプ確認
-# - VNC画面で目視確認
-```
-
-### ポート設定（固定）
-- **Flaskポート**: 5001（start-flask.shで`PORT=5001`設定済み）
-- **HTTPサーバー**: 8000
-- **VNC**: 6080
-
-### トラブルシューティング
-1. VPS上のコードを確認: `grep -n "検索文字列" /opt/ai-auto-form/backend/services/automation_service.py`
-2. Flaskプロセス確認: `ps aux | grep "python.*app.py"`
-3. Pythonキャッシュ完全削除 + Flask強制再起動（上記手順）
-4. ブラウザキャッシュクリア: Ctrl+Shift+R
 
 ---
 
@@ -325,6 +148,56 @@ Phase 2以降で復元予定:
 - docker-compose-kasm.yml, setup-novnc.sh
 - backend/models.py, database_old.py, app_backup.py, seed_test_data.py
 - backend/api/*.py（products, projects, targets, tasks, workers）
+
+---
+
+## 📝 最新の作業ログ（2025-12-31）
+
+### 実装完了: 案件ごとの送信者情報管理
+
+**問題**: フォーム自動入力で name/email/company/phone が空になる
+- タスク生成時に送信者情報が固定値（山田太郎）でハードコード
+- 案件ごとに異なる送信者を設定できない
+
+**解決策**: Productモデルに送信者情報カラムを追加
+
+#### 1. データベースマイグレーション
+```sql
+ALTER TABLE simple_products 
+ADD COLUMN sender_name VARCHAR(100),
+ADD COLUMN sender_email VARCHAR(200),
+ADD COLUMN sender_company VARCHAR(200),
+ADD COLUMN sender_phone VARCHAR(50);
+```
+
+- マイグレーションエンドポイント: `POST /api/simple/migrate/add-sender-info`
+- 実行日時: 2025-12-31 23:52 JST
+- 既存4商品にデフォルト値設定完了
+
+#### 2. バックエンド実装
+- **POST /api/simple/products**: 新規案件作成（送信者情報必須）
+- **PUT /api/simple/products/<id>**: 案件編集（送信者情報更新対応）
+- **タスク生成**: `product.sender_*` から送信者情報を取得してform_dataに設定
+
+#### 3. フロントエンド実装
+- **admin-phase2a.html**:
+  - 案件登録フォームに送信者情報セクション追加（4フィールド）
+  - 案件編集モーダルに送信者情報フィールド追加
+  - バリデーション実装（必須チェック）
+
+#### 4. 検証結果
+- ✅ 案件登録: 送信者情報付きで新規作成成功
+- ✅ 案件編集: 送信者情報の更新成功
+- ✅ タスク生成: 案件固有の送信者情報がform_dataに正しく設定
+- ✅ フォーム自動入力: 全フィールド（company/name/email/phone/message）が正常に入力される
+
+**ファイル変更**:
+- `backend/simple_models.py`: Productモデルにsender_*カラム追加
+- `backend/api/simple_api.py`: 
+  - create_product() 新規作成
+  - update_product() 送信者情報更新対応
+  - migrate_add_sender_info() マイグレーション実装
+- `admin-phase2a.html`: 案件登録・編集フォーム拡張
 
 ---
 

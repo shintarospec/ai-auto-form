@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>作業コックピット - AI AutoForm</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        @keyframes slideOutRight {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+        .toast {
+            animation: slideInRight 0.3s ease-out;
+        }
+        .toast.hiding {
+            animation: slideOutRight 0.3s ease-in;
+        }
+        .loading {
+            display: inline-block;
+            width: 1.2rem;
+            height: 1.2rem;
+            border: 3px solid #475569;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+        .vnc-container {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 8px;
+            background: #000;
+        }
+        /* noVNCのツールバーとステータスバーを非表示 */
+        #vnc-frame {
+            overflow: hidden;
+        }
+        .task-dropdown {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .task-dropdown.open {
+            max-height: 400px;
+        }
+        .guide-box {
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        /* チュートリアルスタイル */
+        .tutorial-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .tutorial-highlight {
+            position: relative;
+            z-index: 10000;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.8), 0 0 30px rgba(59, 130, 246, 0.8);
+            border-radius: 12px;
+        }
+        @keyframes bounce-arrow {
+            0%, 100% { transform: translateX(0); }
+            50% { transform: translateX(10px); }
+        }
+        .bounce-arrow {
+            animation: bounce-arrow 1s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-200 h-screen flex flex-col overflow-hidden">
+    <!-- ヘッダー -->
+    <div class="bg-black border-b-4 border-blue-500 shadow-2xl">
+        <div class="px-8 py-5 flex items-center justify-between">
+            <h1 class="text-3xl font-bold text-white flex items-center gap-3">
+                <i class="fa-solid fa-rocket text-blue-400 text-4xl"></i>
+                <span>作業コックピット</span>
+            </h1>
+            <button onclick="startTutorial()" class="px-5 py-3 bg-purple-600 hover:bg-purple-500 text-white text-base rounded-xl font-bold transition-all transform hover:scale-105 shadow-lg flex items-center gap-2">
+                <i class="fa-solid fa-circle-question text-lg"></i>
+                <span>使い方</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- メインコンテンツ: 2列構成 -->
+    <div class="flex-1 flex overflow-hidden">
+        <!-- 左側: 送る内容 (40%) -->
+        <div class="w-[40%] bg-slate-800 border-r-4 border-blue-500 flex flex-col">
+            <!-- ヘッダー -->
+            <div class="bg-black px-6 py-3 border-b-2 border-slate-700">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-paper-plane text-blue-400 text-lg"></i>
+                    送る内容
+                </h2>
+            </div>
+
+            <!-- 送信内容エリア -->
+            <div class="flex-1 overflow-y-auto p-6" id="task-detail">
+                <div class="text-center py-20 text-slate-400" id="no-task-message">
+                    <p class="text-xl font-bold mb-6">下のボタンをクリックでスタート！</p>
+                    <button onclick="startFirstTask()" class="px-8 py-4 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white text-xl rounded-2xl font-bold transition-all transform hover:scale-105 shadow-2xl flex items-center gap-3 mx-auto">
+                        <i class="fa-solid fa-play text-2xl"></i>
+                        <span>始める</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右側: 送る先 (60%) -->
+        <div class="w-[60%] bg-slate-950 flex flex-col">
+            <!-- VNCヘッダー -->
+            <div class="bg-black px-6 py-3 border-b-2 border-slate-700">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-desktop text-xl text-blue-400"></i>
+                        <h2 class="text-xl font-bold text-white">送る先</h2>
+                    </div>
+                    <div class="flex items-center gap-2 text-sm">
+                        <span class="text-slate-400">🤖 自動入力</span>
+                        <i class="fa-solid fa-arrow-right text-blue-400 text-xs"></i>
+                        <span class="text-slate-400">👁️ 確認</span>
+                        <i class="fa-solid fa-arrow-right text-blue-400 text-xs"></i>
+                        <span class="text-slate-400">✅ 送信</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VNCビューア -->
+            <div class="flex-1 p-4 relative" id="vnc-area">
+                <!-- ツールチップ -->
+                <div id="vnc-tooltip" class="hidden absolute top-8 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-6 py-3 rounded-xl shadow-2xl z-10 pointer-events-none">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-hand-pointer text-lg"></i>
+                        <span class="font-bold">左画面から送りたい項目を選択してね</span>
+                    </div>
+                </div>
+                
+                <iframe 
+                    id="vnc-frame"
+                    src="http://153.126.154.158:6080/vnc.html?autoconnect=true&resize=scale&clipboard=true&view_only=false&path=websockify"
+                    class="vnc-container"
+                    allow="clipboard-read; clipboard-write"
+                    sandbox="allow-same-origin allow-scripts allow-forms allow-pointer-lock"
+                    title="VNC Viewer">
+                </iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- フッター（ページ下部） -->
+    <div class="bg-black border-t-2 border-slate-700">
+        <div class="px-6 py-4">
+            <!-- オプション折りたたみエリア -->
+            <details class="bg-slate-800 border-2 border-slate-700 rounded-xl overflow-hidden">
+                <summary class="px-4 py-3 cursor-pointer hover:bg-slate-700 transition text-slate-300 font-bold flex items-center gap-3">
+                    <i class="fa-solid fa-cog text-lg text-blue-400"></i>
+                    <span>オプション</span>
+                </summary>
+                <div class="px-4 py-4 space-y-3">
+                    <!-- 操作ボタン -->
+                    <div class="flex items-center gap-3">
+                        <button onclick="resetAllTasks()" class="px-5 py-3 bg-orange-600 hover:bg-orange-500 text-white text-base rounded-xl font-bold transition-all transform hover:scale-105 shadow-lg flex items-center gap-2">
+                            <i class="fa-solid fa-rotate-right text-lg"></i>
+                            <span>全リセット</span>
+                        </button>
+                        <button onclick="manualRefresh()" class="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white text-base rounded-xl font-bold transition-all transform hover:scale-105 shadow-lg flex items-center gap-2">
+                            <i class="fa-solid fa-rotate-right text-lg" id="refresh-icon"></i>
+                            <span id="refresh-text">更新</span>
+                        </button>
+                    </div>
+                    
+                    <!-- タスク選択エリア -->
+                    <div class="bg-slate-900 border border-slate-600 rounded-lg p-3">
+                        <div class="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center gap-2">
+                            <i class="fa-solid fa-list-check"></i>
+                            <span>他のタスクを選ぶ</span>
+                            <span id="task-count-badge" class="ml-auto px-2 py-1 bg-blue-600 text-white rounded-full text-xs font-bold">0件</span>
+                        </div>
+                        <div class="max-h-[150px] overflow-y-auto">
+                            <div class="grid grid-cols-2 gap-2" id="task-list-grid">
+                                <div class="col-span-2 text-center py-8 text-slate-400">
+                                    読み込み中...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <!-- トースト通知コンテナ -->
+    <div id="toast-container" class="fixed top-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
+    </div>
+
+    <!-- チュートリアルオーバーレイ -->
+    <div id="tutorial-overlay" class="hidden tutorial-overlay">
+        <div class="bg-slate-800 border-4 border-blue-500 rounded-3xl p-8 max-w-2xl shadow-2xl">
+            <div id="tutorial-content">
+                <!-- ステップごとのコンテンツ -->
+            </div>
+        </div>
+    </div>
+
+    <!-- フローティング統計 -->
+    <button onclick="toggleStats()" class="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-500 text-white px-6 py-4 rounded-full shadow-2xl transition-all transform hover:scale-110 flex items-center gap-3 z-50">
+        <i class="fa-solid fa-chart-simple text-2xl"></i>
+        <span class="font-bold text-lg">統計を見る</span>
+    </button>
+
+    <!-- 統計モーダル -->
+    <div id="stats-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50" onclick="toggleStats()">
+        <div class="bg-slate-800 border-2 border-slate-600 rounded-2xl p-8 max-w-2xl" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-chart-bar text-blue-400"></i>
+                    タスク統計
+                </h3>
+                <button onclick="toggleStats()" class="text-slate-400 hover:text-white text-3xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="grid grid-cols-2 gap-6">
+                <div class="bg-slate-700 rounded-xl p-6 text-center">
+                    <div class="text-4xl font-bold text-white mb-2" id="stat-total">0</div>
+                    <div class="text-slate-300 font-medium">総タスク数</div>
+                </div>
+                <div class="bg-yellow-900/30 border-2 border-yellow-600 rounded-xl p-6 text-center">
+                    <div class="text-4xl font-bold text-yellow-400 mb-2" id="stat-pending">0</div>
+                    <div class="text-yellow-300 font-medium">未処理</div>
+                </div>
+                <div class="bg-green-900/30 border-2 border-green-600 rounded-xl p-6 text-center">
+                    <div class="text-4xl font-bold text-green-400 mb-2" id="stat-completed">0</div>
+                    <div class="text-green-300 font-medium">完了</div>
+                </div>
+                <div class="bg-red-900/30 border-2 border-red-600 rounded-xl p-6 text-center">
+                    <div class="text-4xl font-bold text-red-400 mb-2" id="stat-failed">0</div>
+                    <div class="text-red-300 font-medium">失敗</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.hostname === 'localhost' 
+            ? 'http://localhost:5001'
+            : window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/)
+                ? `http://${window.location.hostname}:5001`
+                : window.location.origin.replace('-8000.', '-5001.');
+        
+        let tasks = [];
+        let selectedTask = null;
+        let showVncTooltip = false; // ツールチップ表示フラグ
+
+        // トースト通知を表示
+        function showToast(message, type = 'success', duration = 3000) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const bgColors = {
+                'success': 'bg-green-600',
+                'info': 'bg-blue-600',
+                'warning': 'bg-orange-600',
+                'error': 'bg-red-600'
+            };
+            
+            const icons = {
+                'success': 'fa-check-circle',
+                'info': 'fa-info-circle',
+                'warning': 'fa-exclamation-triangle',
+                'error': 'fa-times-circle'
+            };
+            
+            toast.className = `toast ${bgColors[type]} text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 min-w-[300px] pointer-events-auto`;
+            toast.innerHTML = `
+                <i class="fa-solid ${icons[type]} text-2xl"></i>
+                <span class="font-bold text-base">${message}</span>
+            `;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.add('hiding');
+                setTimeout(() => {
+                    container.removeChild(toast);
+                }, 300);
+            }, duration);
+        }
+
+        async function init() {
+            await loadTasks();
+            setInterval(loadTasks, 3000);
+            
+            // VNCエリアのツールチップ機能を設定
+            const vncArea = document.getElementById('vnc-area');
+            const vncTooltip = document.getElementById('vnc-tooltip');
+            let tooltipTimeout;
+            
+            if (vncArea && vncTooltip) {
+                vncArea.addEventListener('mouseenter', () => {
+                    console.log('VNCエリアにマウス: showVncTooltip =', showVncTooltip);
+                    // 自動入力実行後のみツールチップを表示
+                    if (!showVncTooltip) {
+                        console.log('ツールチップ表示スキップ（フラグfalse）');
+                        return;
+                    }
+                    
+                    console.log('ツールチップ表示（フラグtrue）');
+                    vncTooltip.classList.remove('hidden');
+                    clearTimeout(tooltipTimeout);
+                    tooltipTimeout = setTimeout(() => {
+                        vncTooltip.classList.add('hidden');
+                    }, 4000);
+                });
+                
+                vncArea.addEventListener('mouseleave', () => {
+                    clearTimeout(tooltipTimeout);
+                    vncTooltip.classList.add('hidden');
+                });
+            }
+        }
+
+        async function startFirstTask() {
+            // IDが一番若い未処理タスクを見つけて選択
+            const pendingTasks = tasks.filter(t => t.status === 'pending').sort((a, b) => a.id - b.id);
+            if (pendingTasks.length > 0) {
+                selectTask(pendingTasks[0].id);
+                showToast('最初のタスクを表示しました', 'info', 2000);
+            } else {
+                showToast('未処理のタスクがありません', 'warning', 3000);
+            }
+        }
+
+        async function loadTasks() {
+            try {
+                const response = await fetch(`${API_BASE}/api/simple/tasks`);
+                tasks = await response.json();
+                updateStats();
+                renderTaskList();
+                
+                if (selectedTask) {
+                    const updated = tasks.find(t => t.id === selectedTask.id);
+                    if (updated) {
+                        selectedTask = updated;
+                        renderTaskDetail(selectedTask);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load tasks:', error);
+            }
+        }
+
+        function toggleStats() {
+            const modal = document.getElementById('stats-modal');
+            modal.classList.toggle('hidden');
+            modal.classList.toggle('flex');
+        }
+
+        async function manualRefresh() {
+            const icon = document.getElementById('refresh-icon');
+            const text = document.getElementById('refresh-text');
+            
+            icon.className = 'fa-solid fa-spinner fa-spin text-xl';
+            text.textContent = '更新中...';
+            
+            await loadTasks();
+            
+            icon.className = 'fa-solid fa-check text-xl';
+            text.textContent = '完了';
+            
+            setTimeout(() => {
+                icon.className = 'fa-solid fa-rotate-right text-xl';
+                text.textContent = '更新';
+            }, 1000);
+        }
+
+        async function resetAllTasks() {
+            try {
+                const response = await fetch(`${API_BASE}/api/simple/tasks/reset`, { method: 'POST' });
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    showToast(`${result.reset_count}件のタスクをリセットしました`, 'success');
+                    await loadTasks();
+                } else {
+                    showToast(`リセット失敗: ${result.error || '不明なエラー'}`, 'error');
+                }
+            } catch (error) {
+                showToast('リセットに失敗しました', 'error');
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('stat-total').textContent = tasks.length;
+            document.getElementById('stat-pending').textContent = tasks.filter(t => t.status === 'pending').length;
+            document.getElementById('stat-completed').textContent = tasks.filter(t => t.status === 'completed').length;
+            document.getElementById('stat-failed').textContent = tasks.filter(t => t.status === 'failed').length;
+            document.getElementById('task-count-badge').textContent = `${tasks.length}件`;
+        }
+
+        function renderTaskList() {
+            const container = document.getElementById('task-list-grid');
+            
+            if (tasks.length === 0) {
+                container.innerHTML = '<div class="col-span-2 text-center py-8 text-slate-400">タスクがありません</div>';
+                return;
+            }
+
+            container.innerHTML = tasks.map(task => `
+                <button onclick="selectTask(${task.id})" class="text-left p-4 rounded-xl border-2 transition-all transform hover:scale-105 ${
+                    selectedTask && selectedTask.id === task.id 
+                        ? 'bg-blue-600 border-blue-400 shadow-xl shadow-blue-500/50' 
+                        : 'bg-slate-700 border-slate-600 hover:border-blue-400 hover:shadow-lg'
+                }">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="font-bold text-lg text-white truncate">${task.company.name}</div>
+                        <span class="px-3 py-1 rounded-full text-xs font-bold ${getStatusBadgeClass(task.status)}">
+                            ${getStatusText(task.status)}
+                        </span>
+                    </div>
+                    <div class="text-sm text-slate-300">${task.product.name}</div>
+                    <div class="text-xs text-slate-400 mt-1">ID: ${task.id}</div>
+                </button>
+            `).join('');
+        }
+
+        function selectTask(taskId) {
+            selectedTask = tasks.find(t => t.id === taskId);
+            renderTaskList();
+            renderTaskDetail(selectedTask);
+        }
+
+        function renderTaskDetail(task) {
+            const container = document.getElementById('task-detail');
+            
+            if (!task) {
+                container.innerHTML = `
+                    <div class="text-center py-20 text-slate-400" id="no-task-message">
+                        <p class="text-xl font-bold mb-6">下のボタンをクリックでスタート！</p>
+                        <button onclick="startFirstTask()" class="px-8 py-4 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white text-xl rounded-2xl font-bold transition-all transform hover:scale-105 shadow-2xl flex items-center gap-3 mx-auto">
+                            <i class="fa-solid fa-play text-2xl"></i>
+                            <span>始める</span>
+                        </button>
+                    </div>`;
+                return;
+            }
+
+            const canExecute = task.status === 'pending' || task.status === 'failed';
+            const isCompleted = task.status === 'completed';
+            const canComplete = (task.status === 'in_progress' && task.screenshot_path) || isCompleted;
+
+            container.innerHTML = `
+                <!-- アクションボタン（上部） -->
+                <div class="space-y-3 mb-4">
+                    ${!isCompleted ? `
+                        <button class="w-full px-6 py-4 rounded-xl font-bold text-base transition-all transform hover:scale-105 shadow-xl flex items-center justify-center gap-2 ${
+                            canExecute 
+                                ? 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white' 
+                                : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                        }" onclick="executeTask(${task.id})" ${!canExecute ? 'disabled' : ''}>
+                            ${task.status === 'in_progress' ? '<span class="loading"></span>' : '<i class="fa-solid fa-robot text-lg"></i>'}
+                            自動入力を実行
+                        </button>
+                    ` : ''}
+                    
+                    ${task.status === 'in_progress' && task.screenshot_path ? `
+                        <button class="w-full px-6 py-4 rounded-xl font-bold text-base shadow-xl flex items-center justify-center gap-2 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white transition-all transform hover:scale-105" onclick="completeTask(${task.id})">
+                            <i class="fa-solid fa-check text-lg"></i>
+                            送信完了
+                        </button>
+                    ` : ''}
+
+                    ${isCompleted ? `
+                        <div class="w-full px-6 py-4 rounded-xl font-bold text-base flex items-center justify-center gap-3 bg-green-900/30 border-2 border-green-500 text-green-400">
+                            <i class="fa-solid fa-circle-check text-2xl"></i>
+                            <span>送信完了しました</span>
+                        </div>
+                    ` : ''}
+
+                    ${task.status === 'in_progress' && !isCompleted ? `
+                        <button class="w-full px-6 py-4 rounded-xl font-bold text-base transition-all transform hover:scale-105 shadow-xl flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white" onclick="skipTask(${task.id})">
+                            <i class="fa-solid fa-forward text-lg"></i>
+                            このタスクをスキップ
+                        </button>
+                    ` : ''}
+
+                    ${canComplete || isCompleted ? `
+                        <button class="w-full px-6 py-4 rounded-xl font-bold text-base transition-all transform hover:scale-105 shadow-xl flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white" onclick="goToNextTask()">
+                            <i class="fa-solid fa-arrow-right text-lg"></i>
+                            次のタスクへ
+                        </button>
+                    ` : ''}
+                </div>
+
+                <!-- 送信データ -->
+                <div class="bg-gradient-to-br from-blue-900/30 to-slate-800 border-2 border-blue-600 rounded-xl p-4 mb-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-paper-plane text-blue-400"></i> 
+                            送信データ
+                        </h3>
+                        <div class="bg-blue-600/20 px-2 py-1 rounded-lg">
+                            <span class="text-blue-300 text-xs font-bold">💡 ⚡️送る▷ で右に送信</span>
+                        </div>
+                    </div>
+                    <div class="space-y-2">
+                        ${Object.entries(task.form_data).map(([key, value]) => `
+                            <div class="bg-slate-800 border border-slate-600 rounded-lg p-3 flex items-center gap-3" data-field-name="${key}">
+                                <div class="flex-1">
+                                    <label class="block text-xs font-bold text-slate-300 mb-1">
+                                        <i class="fa-solid fa-tag text-blue-400 text-xs"></i> ${key}
+                                    </label>
+                                    <div class="bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white leading-relaxed">
+                                        ${value}
+                                    </div>
+                                </div>
+                                <button class="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-lg text-sm font-bold transition-all transform hover:scale-105 shadow-lg vnc-auto-paste-btn flex-shrink-0">
+                                    ⚡️送る▷
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- オプション：詳細情報（ページ下部） -->
+                <details class="bg-slate-700/30 border border-slate-600 rounded-xl overflow-hidden mt-6">
+                    <summary class="px-4 py-2 cursor-pointer hover:bg-slate-700 transition text-slate-400 text-sm font-medium flex items-center gap-2">
+                        <i class="fa-solid fa-circle-info text-xs"></i>
+                        <span>オプション：詳細情報</span>
+                    </summary>
+                    <div class="px-4 py-3 space-y-4 bg-slate-800/30">
+                        ${task.screenshot_path ? `
+                            <div>
+                                <div class="text-xs font-bold text-slate-400 uppercase mb-2 flex items-center gap-2">
+                                    <i class="fa-solid fa-camera"></i> 画面確認
+                                </div>
+                                <img src="${API_BASE}${task.screenshot_path}" alt="Screenshot" class="rounded-lg border border-slate-600 w-full">
+                            </div>
+                        ` : ''}
+                        <div>
+                            <div class="text-xs font-bold text-slate-400 uppercase mb-1">送信先企業</div>
+                            <div class="text-white font-bold text-sm">${task.company.name}</div>
+                            <div class="text-slate-300 text-xs">${task.company.industry || 'N/A'}</div>
+                        </div>
+                        <div>
+                            <div class="text-xs font-bold text-slate-400 uppercase mb-1">商材</div>
+                            <div class="text-white font-bold text-sm">${task.product.name}</div>
+                            <div class="text-slate-300 text-xs">${task.product.description}</div>
+                        </div>
+                    </div>
+                </details>
+            `;
+            
+            setTimeout(() => {
+                document.querySelectorAll('.vnc-auto-paste-btn').forEach(button => {
+                    button.addEventListener('click', function(event) {
+                        event.stopPropagation();
+                        const fieldDiv = this.closest('[data-field-name]');
+                        const valueDisplay = fieldDiv.querySelector('.bg-slate-900');
+                        const text = valueDisplay.textContent.trim();
+                        autoPasteToVNC(text, event);
+                    });
+                });
+            }, 0);
+        }
+
+        async function executeTask(taskId) {
+            try {
+                const btn = event.target;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="loading"></span> 実行中...';
+
+                const response = await fetch(`${API_BASE}/api/simple/tasks/${taskId}/execute`, { method: 'POST' });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showVncTooltip = true; // executeTask後はツールチップを表示する準備
+                    console.log('executeTask完了: showVncTooltip =', showVncTooltip);
+                    showToast('送信完了しました！左の画面にあるボタンで次に進んでください！', 'success', 5000);
+                    await loadTasks();
+                    
+                    // 初回ユーザーチェック
+                    checkFirstTimeUser();
+                } else {
+                    showToast(`エラー: ${result.error || '実行に失敗しました'}`, 'error');
+                }
+            } catch (error) {
+                showToast('実行に失敗しました: ' + error.message, 'error');
+            } finally {
+                await loadTasks();
+            }
+        }
+
+        async function completeTask(taskId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/simple/tasks/${taskId}/complete`, { method: 'POST' });
+                
+                if (response.ok) {
+                    showVncTooltip = true; // completeTask後はツールチップを非表示にする
+                    console.log('completeTask完了: showVncTooltip =', showVncTooltip);
+                    showToast('タスクを完了にしました', 'success');
+                    await loadTasks();
+                } else {
+                    const error = await response.json();
+                    showToast(`エラー: ${error.message || '完了処理に失敗しました'}`, 'error');
+                }
+            } catch (error) {
+                showToast('完了処理に失敗しました', 'error');
+            }
+        }
+
+        async function skipTask(taskId) {
+            try {
+                const response = await fetch(`${API_BASE}/api/simple/tasks/${taskId}/skip`, { method: 'POST' });
+                
+                if (response.ok) {
+                    showToast('タスクをスキップしました。後でもう一度挑戦できます', 'info', 3000);
+                    await loadTasks();
+                    
+                    // 次のpendingタスクを自動選択
+                    const pendingTasks = tasks.filter(t => t.status === 'pending');
+                    if (pendingTasks.length > 0) {
+                        const nextTask = pendingTasks[0];
+                        selectTask(nextTask.id);
+                    } else {
+                        showToast('全てのタスクを処理しました！', 'success', 3000);
+                    }
+                } else {
+                    const error = await response.json();
+                    showToast(`エラー: ${error.message || 'スキップ処理に失敗しました'}`, 'error');
+                }
+            } catch (error) {
+                showToast('スキップ処理に失敗しました', 'error');
+            }
+        }
+
+        async function autoPasteToVNC(text, event) {
+            event.stopPropagation();
+            
+            const btn = event.target;
+            const originalHTML = btn.innerHTML;
+            
+            try {
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xl"></i> 送信中...';
+                btn.disabled = true;
+
+                const response = await fetch('http://153.126.154.158:5001/api/simple/vnc/auto-paste', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    btn.innerHTML = '<i class="fa-solid fa-check text-xl"></i> 送信完了！';
+                    btn.className = btn.className.replace('from-blue-600 to-blue-500', 'from-green-600 to-green-500');
+                    
+                    setTimeout(() => {
+                        btn.innerHTML = originalHTML;
+                        btn.className = btn.className.replace('from-green-600 to-green-500', 'from-blue-600 to-blue-500');
+                        btn.disabled = false;
+                    }, 2000);
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+            } catch (error) {
+                btn.innerHTML = '<i class="fa-solid fa-xmark text-xl"></i> 送信失敗';
+                btn.className = btn.className.replace('from-blue-600 to-blue-500', 'from-red-600 to-red-500');
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.className = btn.className.replace('from-red-600 to-red-500', 'from-blue-600 to-blue-500');
+                    btn.disabled = false;
+                }, 2000);
+                
+                showToast('送信に失敗しました。フォーム画面で入力欄をクリックしてから再試行してください', 'error', 4000);
+            }
+        }
+
+        function getStatusText(status) {
+            const map = { 'pending': '未処理', 'in_progress': '処理中', 'completed': '完了', 'failed': '失敗' };
+            return map[status] || status;
+        }
+
+        function getStatusBadgeClass(status) {
+            const map = {
+                'pending': 'bg-yellow-600 text-white',
+                'in_progress': 'bg-blue-600 text-white',
+                'completed': 'bg-green-600 text-white',
+                'failed': 'bg-red-600 text-white'
+            };
+            return map[status] || 'bg-slate-600 text-white';
+        }
+
+        function goToNextTask() {
+            // 未処理のタスクを探す
+            const pendingTasks = tasks.filter(t => t.status === 'pending');
+            
+            if (pendingTasks.length === 0) {
+                showToast('お疲れ様でした！全てのタスクが完了しました', 'success', 4000);
+                return;
+            }
+
+            // 次の未処理タスクを選択
+            const nextTask = pendingTasks[0];
+            selectTask(nextTask.id);
+
+            // ツールチップフラグをリセット
+            showVncTooltip = false;
+
+            // スクロールをトップに
+            document.getElementById('task-detail').scrollTop = 0;
+            
+            // フィードバック
+            showToast('次のタスクを表示しました', 'info', 2000);
+        }
+
+        // チュートリアル機能
+        let tutorialStep = 0;
+        const tutorialSteps = [
+            {
+                title: '📖 使い方ガイド（1/4）',
+                content: `
+                    <div class="text-center">
+                        <p class="text-xl text-white mb-4">ようこそ！作業コックピットへ</p>
+                        <p class="text-lg text-slate-300 mb-6">簡単3ステップで企業へメッセージを送信できます</p>
+                        <div class="flex items-center justify-center gap-4 text-blue-400 text-lg">
+                            <span>🤖 自動入力</span>
+                            <i class="fa-solid fa-arrow-right"></i>
+                            <span>👀 確認</span>
+                            <i class="fa-solid fa-arrow-right"></i>
+                            <span>✅ 送信</span>
+                        </div>
+                    </div>
+                `,
+                buttons: `<button onclick="nextTutorialStep()" class="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white text-lg rounded-xl font-bold">次へ</button>`
+            },
+            {
+                title: '📖 使い方ガイド（2/4）',
+                content: `
+                    <div class="text-center">
+                        <p class="text-xl text-white mb-4">まず「自動入力を実行」ボタンを押します</p>
+                        <p class="text-lg text-slate-300 mb-6">右側のフォーム画面に自動で内容が入力されます</p>
+                        <div class="bg-blue-900/30 border-2 border-blue-500 rounded-xl p-6">
+                            <i class="fa-solid fa-robot text-6xl text-blue-400 mb-4"></i>
+                            <p class="text-white font-bold text-lg">自動入力を実行</p>
+                        </div>
+                    </div>
+                `,
+                buttons: `
+                    <button onclick="prevTutorialStep()" class="px-6 py-3 bg-slate-600 hover:bg-slate-500 text-white rounded-xl font-bold">戻る</button>
+                    <button onclick="nextTutorialStep()" class="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white text-lg rounded-xl font-bold">次へ</button>
+                `
+            },
+            {
+                title: '📖 使い方ガイド（3/4）',
+                content: `
+                    <div class="text-center">
+                        <p class="text-xl text-white mb-4">右の画面で入力したい場所をクリック</p>
+                        <p class="text-lg text-slate-300 mb-6">フォーム画面内のフォームを選択します</p>
+                        <div class="flex items-center justify-center gap-6 my-6">
+                            <div class="bg-slate-700 p-6 rounded-xl">
+                                <p class="text-slate-400 text-sm mb-3">フォーム画面</p>
+                                <div class="flex flex-col gap-3">
+                                    <div class="bg-slate-800 p-4 rounded-lg border-2 border-slate-600 opacity-50">
+                                        <p class="text-slate-500 text-sm">フォーム1</p>
+                                    </div>
+                                    <div class="bg-slate-900 p-4 rounded-lg border-4 border-blue-500 shadow-lg shadow-blue-500/50">
+                                        <p class="text-white font-bold text-sm">👆 フォーム2</p>
+                                        <p class="text-blue-400 text-xs mt-1">選択中</p>
+                                    </div>
+                                    <div class="bg-slate-800 p-4 rounded-lg border-2 border-slate-600 opacity-50">
+                                        <p class="text-slate-500 text-sm">フォーム3</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `,
+                buttons: `
+                    <button onclick="prevTutorialStep()" class="px-6 py-3 bg-slate-600 hover:bg-slate-500 text-white rounded-xl font-bold">戻る</button>
+                    <button onclick="nextTutorialStep()" class="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white text-lg rounded-xl font-bold">次へ</button>
+                `
+            },
+            {
+                title: '📖 使い方ガイド（4/4）',
+                content: `
+                    <div class="text-center">
+                        <p class="text-xl text-white mb-4">左の「⚡送る」ボタンをクリック</p>
+                        <p class="text-lg text-slate-300 mb-6">選択したフォームに内容が送信されます！</p>
+                        <div class="flex items-center justify-center gap-6">
+                            <div class="bg-slate-700 p-4 rounded-xl">
+                                <p class="text-slate-400 text-sm mb-2">送る内容</p>
+                                <div class="bg-blue-600 px-4 py-3 rounded-lg flex items-center gap-2 bounce-arrow">
+                                    <span class="text-white font-bold">⚡送る▷</span>
+                                </div>
+                            </div>
+                            <i class="fa-solid fa-arrow-right text-4xl text-blue-400"></i>
+                            <div class="bg-slate-700 p-4 rounded-xl">
+                                <p class="text-slate-400 text-sm mb-2">フォーム画面</p>
+                                <div class="bg-slate-900 p-4 rounded-lg">
+                                    <p class="text-green-400">✓ 入力完了！</p>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-slate-400 text-sm mt-6">全ての項目を送信したら「送信完了」ボタンを押しましょう</p>
+                    </div>
+                `,
+                buttons: `
+                    <button onclick="prevTutorialStep()" class="px-6 py-3 bg-slate-600 hover:bg-slate-500 text-white rounded-xl font-bold">戻る</button>
+                    <button onclick="closeTutorial()" class="px-8 py-4 bg-green-600 hover:bg-green-500 text-white text-lg rounded-xl font-bold flex items-center gap-2">
+                        <i class="fa-solid fa-check"></i>
+                        <span>分かりました！</span>
+                    </button>
+                `
+            }
+        ];
+
+        function startTutorial() {
+            tutorialStep = 0;
+            document.getElementById('tutorial-overlay').classList.remove('hidden');
+            renderTutorialStep();
+        }
+
+        function nextTutorialStep() {
+            if (tutorialStep < tutorialSteps.length - 1) {
+                tutorialStep++;
+                renderTutorialStep();
+            }
+        }
+
+        function prevTutorialStep() {
+            if (tutorialStep > 0) {
+                tutorialStep--;
+                renderTutorialStep();
+            }
+        }
+
+        function closeTutorial() {
+            document.getElementById('tutorial-overlay').classList.add('hidden');
+            localStorage.setItem('tutorial_completed', 'true');
+        }
+
+        function renderTutorialStep() {
+            const step = tutorialSteps[tutorialStep];
+            const content = document.getElementById('tutorial-content');
+            content.innerHTML = `
+                <div class="text-center mb-6">
+                    <h2 class="text-3xl font-bold text-white mb-4">${step.title}</h2>
+                </div>
+                ${step.content}
+                <div class="flex items-center justify-center gap-4 mt-8">
+                    ${step.buttons}
+                </div>
+            `;
+        }
+
+        // 初回チュートリアル自動表示
+        function checkFirstTimeUser() {
+            const hasCompletedTutorial = localStorage.getItem('tutorial_completed');
+            if (!hasCompletedTutorial && selectedTask && selectedTask.status === 'in_progress') {
+                setTimeout(() => {
+                    startTutorial();
+                }, 1000);
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
