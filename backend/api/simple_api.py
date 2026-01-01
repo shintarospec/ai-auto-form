@@ -17,6 +17,147 @@ from backend.services.gemini_service import GeminiService
 simple_bp = Blueprint('simple', __name__, url_prefix='/api/simple')
 
 
+# ===============================
+# ヘルパー関数: 分割/結合処理
+# ===============================
+
+def combine_split_fields(data, field_base, separator='-'):
+    """
+    分割されたフィールドを結合する
+    例: sender_phone_1, sender_phone_2, sender_phone_3 → "090-0000-0000"
+    """
+    parts = []
+    index = 1
+    while True:
+        key = f"{field_base}_{index}"
+        if key in data and data[key]:
+            parts.append(data[key])
+            index += 1
+        else:
+            break
+    
+    if parts:
+        return separator.join(parts)
+    return None
+
+
+def split_combined_field(value, separator='-'):
+    """
+    結合されたフィールドを分割する
+    例: "090-0000-0000" → ["090", "0000", "0000"]
+    """
+    if not value:
+        return []
+    return [part.strip() for part in value.split(separator) if part.strip()]
+
+
+def prepare_form_data_from_product(product):
+    """
+    Productオブジェクトから form_data を生成
+    分割フィールドと結合フィールドの両方に対応
+    """
+    form_data = {}
+    
+    # 氏名（分割 or 結合）
+    if product.sender_last_name and product.sender_first_name:
+        form_data['name'] = f"{product.sender_last_name} {product.sender_first_name}"
+        form_data['last_name'] = product.sender_last_name
+        form_data['first_name'] = product.sender_first_name
+    elif product.sender_name:
+        form_data['name'] = product.sender_name
+    
+    # フリガナ（分割 or 結合）
+    if product.sender_last_name_kana and product.sender_first_name_kana:
+        form_data['name_kana'] = f"{product.sender_last_name_kana} {product.sender_first_name_kana}"
+        form_data['last_name_kana'] = product.sender_last_name_kana
+        form_data['first_name_kana'] = product.sender_first_name_kana
+    
+    # 会社情報
+    if product.sender_company:
+        form_data['company'] = product.sender_company
+    if product.sender_company_kana:
+        form_data['company_kana'] = product.sender_company_kana
+    if product.sender_company_url:
+        form_data['company_url'] = product.sender_company_url
+    if product.sender_department:
+        form_data['department'] = product.sender_department
+    if product.sender_position:
+        form_data['position'] = product.sender_position
+    if product.sender_rep_name:
+        form_data['rep_name'] = product.sender_rep_name
+    if product.sender_rep_name_kana:
+        form_data['rep_name_kana'] = product.sender_rep_name_kana
+    
+    # 性別
+    if product.sender_gender:
+        form_data['gender'] = product.sender_gender
+    
+    # 電話番号（分割 or 結合）
+    if product.sender_phone_1 and product.sender_phone_2 and product.sender_phone_3:
+        form_data['phone'] = f"{product.sender_phone_1}-{product.sender_phone_2}-{product.sender_phone_3}"
+        form_data['phone1'] = product.sender_phone_1
+        form_data['phone2'] = product.sender_phone_2
+        form_data['phone3'] = product.sender_phone_3
+    elif product.sender_phone:
+        form_data['phone'] = product.sender_phone
+        # 分割を試みる
+        parts = split_combined_field(product.sender_phone, '-')
+        if len(parts) == 3:
+            form_data['phone1'], form_data['phone2'], form_data['phone3'] = parts
+    
+    # 携帯番号（分割 or 結合）
+    if product.sender_mobile_1 and product.sender_mobile_2 and product.sender_mobile_3:
+        form_data['mobile'] = f"{product.sender_mobile_1}-{product.sender_mobile_2}-{product.sender_mobile_3}"
+        form_data['mobile1'] = product.sender_mobile_1
+        form_data['mobile2'] = product.sender_mobile_2
+        form_data['mobile3'] = product.sender_mobile_3
+    
+    # FAX（分割 or 結合）
+    if product.sender_fax_1 and product.sender_fax_2 and product.sender_fax_3:
+        form_data['fax'] = f"{product.sender_fax_1}-{product.sender_fax_2}-{product.sender_fax_3}"
+        form_data['fax1'] = product.sender_fax_1
+        form_data['fax2'] = product.sender_fax_2
+        form_data['fax3'] = product.sender_fax_3
+    
+    # メールアドレス
+    if product.sender_email:
+        form_data['email'] = product.sender_email
+    if product.sender_email_company:
+        form_data['email_company'] = product.sender_email_company
+    if product.sender_email_personal:
+        form_data['email_personal'] = product.sender_email_personal
+    
+    # 郵便番号（分割 or 結合）
+    if product.sender_zipcode_1 and product.sender_zipcode_2:
+        form_data['zipcode'] = f"{product.sender_zipcode_1}-{product.sender_zipcode_2}"
+        form_data['zipcode1'] = product.sender_zipcode_1
+        form_data['zipcode2'] = product.sender_zipcode_2
+    
+    # 住所（分割 or 結合）
+    if product.sender_prefecture:
+        form_data['prefecture'] = product.sender_prefecture
+    if product.sender_city:
+        form_data['city'] = product.sender_city
+    if product.sender_address:
+        form_data['address'] = product.sender_address
+    
+    # 住所結合版
+    if product.sender_prefecture and product.sender_city and product.sender_address:
+        form_data['full_address'] = f"{product.sender_prefecture}{product.sender_city}{product.sender_address}"
+    
+    # お問い合わせ
+    if product.sender_inquiry_title:
+        form_data['inquiry_title'] = product.sender_inquiry_title
+    if product.sender_inquiry_detail:
+        form_data['inquiry_detail'] = product.sender_inquiry_detail
+    
+    return form_data
+
+
+# ===============================
+# API エンドポイント
+# ===============================
+
 @simple_bp.route('/migrate/sender-info', methods=['POST'])
 def migrate_sender_info():
     """送信者情報カラム追加マイグレーション"""
@@ -175,10 +316,14 @@ def create_product():
         if not data.get('name'):
             return jsonify({'error': '案件名は必須です'}), 400
         
-        if not data.get('sender_name'):
-            return jsonify({'error': '送信者名は必須です'}), 400
+        # 送信者名：フルネームまたは姓名どちらかが必須
+        has_name = data.get('sender_name') or (data.get('sender_last_name') and data.get('sender_first_name'))
+        if not has_name:
+            return jsonify({'error': '送信者名（フルネームまたは姓名）は必須です'}), 400
             
-        if not data.get('sender_email'):
+        # メールアドレス：いずれかが必須
+        has_email = data.get('sender_email') or data.get('sender_email_company') or data.get('sender_email_personal')
+        if not has_email:
             return jsonify({'error': '送信者メールアドレスは必須です'}), 400
             
         if not data.get('sender_company'):
@@ -194,10 +339,45 @@ def create_product():
             name=data['name'],
             description=data.get('description'),
             message_template=data.get('message_template'),
-            sender_name=data['sender_name'],
-            sender_email=data['sender_email'],
-            sender_company=data['sender_company'],
-            sender_phone=data.get('sender_phone')
+            # 基本情報（後方互換性のため既存フィールドも保持）
+            sender_name=data.get('sender_name'),
+            sender_last_name=data.get('sender_last_name'),
+            sender_first_name=data.get('sender_first_name'),
+            sender_last_name_kana=data.get('sender_last_name_kana'),
+            sender_first_name_kana=data.get('sender_first_name_kana'),
+            sender_gender=data.get('sender_gender'),
+            # 会社情報
+            sender_company=data.get('sender_company'),
+            sender_company_kana=data.get('sender_company_kana'),
+            sender_company_url=data.get('sender_company_url'),
+            sender_department=data.get('sender_department'),
+            sender_position=data.get('sender_position'),
+            sender_rep_name=data.get('sender_rep_name'),
+            sender_rep_name_kana=data.get('sender_rep_name_kana'),
+            # 連絡先
+            sender_phone=data.get('sender_phone'),
+            sender_phone_1=data.get('sender_phone_1'),
+            sender_phone_2=data.get('sender_phone_2'),
+            sender_phone_3=data.get('sender_phone_3'),
+            sender_mobile_1=data.get('sender_mobile_1'),
+            sender_mobile_2=data.get('sender_mobile_2'),
+            sender_mobile_3=data.get('sender_mobile_3'),
+            sender_fax_1=data.get('sender_fax_1'),
+            sender_fax_2=data.get('sender_fax_2'),
+            sender_fax_3=data.get('sender_fax_3'),
+            # メール
+            sender_email=data.get('sender_email'),
+            sender_email_company=data.get('sender_email_company'),
+            sender_email_personal=data.get('sender_email_personal'),
+            # 住所
+            sender_zipcode_1=data.get('sender_zipcode_1'),
+            sender_zipcode_2=data.get('sender_zipcode_2'),
+            sender_prefecture=data.get('sender_prefecture'),
+            sender_city=data.get('sender_city'),
+            sender_address=data.get('sender_address'),
+            # お問い合わせ
+            sender_inquiry_title=data.get('sender_inquiry_title'),
+            sender_inquiry_detail=data.get('sender_inquiry_detail')
         )
         
         db.add(product)
@@ -698,19 +878,16 @@ def generate_tasks():
                 # AIを使わない場合は、テンプレートをそのまま使用
                 custom_message = product.message_template or f"貴社の{product.name}についてご提案させていただきます。"
             
+            # form_data生成（分割/結合対応）
+            form_data = prepare_form_data_from_product(product)
+            form_data['message'] = custom_message  # メッセージは別途追加
+            
             # タスク作成
-            # 送信者情報は案件（Product）から取得
             task = Task(
                 company_id=company.id,
                 product_id=product_id,
                 status='pending',
-                form_data={
-                    'name': product.sender_name or '担当者名',
-                    'email': product.sender_email or 'info@example.com',
-                    'company': product.sender_company or '送信元会社名',
-                    'phone': product.sender_phone or '03-0000-0000',
-                    'message': custom_message
-                }
+                form_data=form_data
             )
             db.add(task)
             tasks_created += 1
@@ -770,15 +947,73 @@ def update_product(product_id):
         if 'industry' in data:
             product.industry = data['industry']
         
-        # 送信者情報の更新
+        # 送信者情報の更新（すべてのフィールドに対応）
         if 'sender_name' in data:
             product.sender_name = data['sender_name']
-        if 'sender_email' in data:
-            product.sender_email = data['sender_email']
+        if 'sender_last_name' in data:
+            product.sender_last_name = data['sender_last_name']
+        if 'sender_first_name' in data:
+            product.sender_first_name = data['sender_first_name']
+        if 'sender_last_name_kana' in data:
+            product.sender_last_name_kana = data['sender_last_name_kana']
+        if 'sender_first_name_kana' in data:
+            product.sender_first_name_kana = data['sender_first_name_kana']
+        if 'sender_gender' in data:
+            product.sender_gender = data['sender_gender']
         if 'sender_company' in data:
             product.sender_company = data['sender_company']
+        if 'sender_company_kana' in data:
+            product.sender_company_kana = data['sender_company_kana']
+        if 'sender_company_url' in data:
+            product.sender_company_url = data['sender_company_url']
+        if 'sender_department' in data:
+            product.sender_department = data['sender_department']
+        if 'sender_position' in data:
+            product.sender_position = data['sender_position']
+        if 'sender_rep_name' in data:
+            product.sender_rep_name = data['sender_rep_name']
+        if 'sender_rep_name_kana' in data:
+            product.sender_rep_name_kana = data['sender_rep_name_kana']
         if 'sender_phone' in data:
             product.sender_phone = data['sender_phone']
+        if 'sender_phone_1' in data:
+            product.sender_phone_1 = data['sender_phone_1']
+        if 'sender_phone_2' in data:
+            product.sender_phone_2 = data['sender_phone_2']
+        if 'sender_phone_3' in data:
+            product.sender_phone_3 = data['sender_phone_3']
+        if 'sender_mobile_1' in data:
+            product.sender_mobile_1 = data['sender_mobile_1']
+        if 'sender_mobile_2' in data:
+            product.sender_mobile_2 = data['sender_mobile_2']
+        if 'sender_mobile_3' in data:
+            product.sender_mobile_3 = data['sender_mobile_3']
+        if 'sender_fax_1' in data:
+            product.sender_fax_1 = data['sender_fax_1']
+        if 'sender_fax_2' in data:
+            product.sender_fax_2 = data['sender_fax_2']
+        if 'sender_fax_3' in data:
+            product.sender_fax_3 = data['sender_fax_3']
+        if 'sender_email' in data:
+            product.sender_email = data['sender_email']
+        if 'sender_email_company' in data:
+            product.sender_email_company = data['sender_email_company']
+        if 'sender_email_personal' in data:
+            product.sender_email_personal = data['sender_email_personal']
+        if 'sender_zipcode_1' in data:
+            product.sender_zipcode_1 = data['sender_zipcode_1']
+        if 'sender_zipcode_2' in data:
+            product.sender_zipcode_2 = data['sender_zipcode_2']
+        if 'sender_prefecture' in data:
+            product.sender_prefecture = data['sender_prefecture']
+        if 'sender_city' in data:
+            product.sender_city = data['sender_city']
+        if 'sender_address' in data:
+            product.sender_address = data['sender_address']
+        if 'sender_inquiry_title' in data:
+            product.sender_inquiry_title = data['sender_inquiry_title']
+        if 'sender_inquiry_detail' in data:
+            product.sender_inquiry_detail = data['sender_inquiry_detail']
         
         db.commit()
         
@@ -932,6 +1167,108 @@ def migrate_add_sender_info():
         
     except Exception as e:
         db.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@simple_bp.route('/migrate/add-extended-sender-info', methods=['POST'])
+def migrate_add_extended_sender_info():
+    """マイグレーション: simple_productsに拡張送信者情報カラム追加"""
+    db = get_db_session()
+    try:
+        print("📝 拡張送信者情報マイグレーション開始")
+        
+        # 基本情報カラム追加
+        db.execute(text("""
+            ALTER TABLE simple_products 
+            ADD COLUMN IF NOT EXISTS sender_last_name VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS sender_first_name VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS sender_last_name_kana VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS sender_first_name_kana VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS sender_gender VARCHAR(10)
+        """))
+        print("✅ 基本情報カラム追加完了")
+        
+        # 会社情報カラム追加
+        db.execute(text("""
+            ALTER TABLE simple_products 
+            ADD COLUMN IF NOT EXISTS sender_company_kana VARCHAR(200),
+            ADD COLUMN IF NOT EXISTS sender_company_url VARCHAR(500),
+            ADD COLUMN IF NOT EXISTS sender_department VARCHAR(100),
+            ADD COLUMN IF NOT EXISTS sender_position VARCHAR(100),
+            ADD COLUMN IF NOT EXISTS sender_rep_name VARCHAR(100),
+            ADD COLUMN IF NOT EXISTS sender_rep_name_kana VARCHAR(100)
+        """))
+        print("✅ 会社情報カラム追加完了")
+        
+        # 連絡先カラム追加
+        db.execute(text("""
+            ALTER TABLE simple_products 
+            ADD COLUMN IF NOT EXISTS sender_phone_1 VARCHAR(10),
+            ADD COLUMN IF NOT EXISTS sender_phone_2 VARCHAR(10),
+            ADD COLUMN IF NOT EXISTS sender_phone_3 VARCHAR(10),
+            ADD COLUMN IF NOT EXISTS sender_mobile_1 VARCHAR(10),
+            ADD COLUMN IF NOT EXISTS sender_mobile_2 VARCHAR(10),
+            ADD COLUMN IF NOT EXISTS sender_mobile_3 VARCHAR(10),
+            ADD COLUMN IF NOT EXISTS sender_fax_1 VARCHAR(10),
+            ADD COLUMN IF NOT EXISTS sender_fax_2 VARCHAR(10),
+            ADD COLUMN IF NOT EXISTS sender_fax_3 VARCHAR(10)
+        """))
+        print("✅ 連絡先カラム追加完了")
+        
+        # メールカラム追加
+        db.execute(text("""
+            ALTER TABLE simple_products 
+            ADD COLUMN IF NOT EXISTS sender_email_company VARCHAR(200),
+            ADD COLUMN IF NOT EXISTS sender_email_personal VARCHAR(200)
+        """))
+        print("✅ メールカラム追加完了")
+        
+        # 住所カラム追加
+        db.execute(text("""
+            ALTER TABLE simple_products 
+            ADD COLUMN IF NOT EXISTS sender_zipcode_1 VARCHAR(10),
+            ADD COLUMN IF NOT EXISTS sender_zipcode_2 VARCHAR(10),
+            ADD COLUMN IF NOT EXISTS sender_prefecture VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS sender_city VARCHAR(100),
+            ADD COLUMN IF NOT EXISTS sender_address VARCHAR(500)
+        """))
+        print("✅ 住所カラム追加完了")
+        
+        # お問い合わせカラム追加
+        db.execute(text("""
+            ALTER TABLE simple_products 
+            ADD COLUMN IF NOT EXISTS sender_inquiry_title VARCHAR(500),
+            ADD COLUMN IF NOT EXISTS sender_inquiry_detail TEXT
+        """))
+        print("✅ お問い合わせカラム追加完了")
+        
+        db.commit()
+        
+        # 確認
+        result = db.execute(text("""
+            SELECT column_name, data_type, character_maximum_length 
+            FROM information_schema.columns 
+            WHERE table_name = 'simple_products' 
+              AND column_name LIKE 'sender_%'
+            ORDER BY ordinal_position
+        """))
+        
+        columns = [{'column': r[0], 'type': r[1], 'max_length': r[2]} for r in result]
+        
+        return jsonify({
+            'success': True, 
+            'message': '拡張送信者情報マイグレーション完了',
+            'columns_added': len(columns),
+            'columns': columns
+        })
+        
+    except Exception as e:
+        db.rollback()
+        print(f"❌ マイグレーションエラー: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
     finally:
         db.close()
