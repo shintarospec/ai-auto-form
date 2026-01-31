@@ -62,7 +62,8 @@ class FormAutomationService:
         self,
         form_url: str,
         message_data: Dict,
-        wait_for_captcha: bool = True
+        wait_for_captcha: bool = True,
+        form_fields: list = None
     ) -> Dict:
         """
         問い合わせフォームに自動入力
@@ -76,6 +77,7 @@ class FormAutomationService:
                 - sender_phone: 電話番号（オプション）
                 - message: メッセージ本文
             wait_for_captcha: reCAPTCHA待機するか
+            form_fields: AI解析結果のフォームフィールド情報（オプション）
         
         Returns:
             結果
@@ -105,65 +107,14 @@ class FormAutomationService:
             # フォームフィールドの検出と入力
             fields_filled = []
             
-            # 会社名フィールド（先に入力）
-            company_selectors = [
-                'input#company',  # ID完全一致（最優先）
-                'input[name="company"]',  # name完全一致
-                'input[id*="company"]',
-                'input[name*="company"]',
-                'input[placeholder*="会社"]',
-                'input[placeholder*="企業"]',
-            ]
-            if self._fill_field(page, company_selectors, message_data.get('company', '')):
-                fields_filled.append('company')
-            
-            # 名前フィールド
-            name_selectors = [
-                'input#name',  # ID完全一致（最優先）
-                'input[name="name"]',  # name完全一致
-                'input[id*="name"][id*="name"]:not([id*="company"]):not([id*="user"])',  # companyname等を除外
-                'input[placeholder*="名前"]',
-                'input[placeholder*="お名前"]',
-            ]
-            if self._fill_field(page, name_selectors, message_data.get('name', '')):
-                fields_filled.append('name')
-            
-            # メールフィールド
-            email_selectors = [
-                'input#email',  # ID完全一致（最優先）
-                'input[name="email"]',  # name完全一致
-                'input[type="email"]',
-                'input[name*="email"]',
-                'input[name*="mail"]',
-                'input[id*="email"]',
-            ]
-            if self._fill_field(page, email_selectors, message_data.get('email', '')):
-                fields_filled.append('email')
-            
-            # 電話番号フィールド（オプション）
-            phone_selectors = [
-                'input#phone',  # ID完全一致（最優先）
-                'input[name="phone"]',  # name完全一致
-                'input[type="tel"]',
-                'input[name*="phone"]',
-                'input[name*="tel"]',
-                'input[id*="phone"]',
-            ]
-            if message_data.get('phone'):
-                if self._fill_field(page, phone_selectors, message_data.get('phone')):
-                    fields_filled.append('phone')
-            
-            # メッセージフィールド
-            message_selectors = [
-                'textarea#message',  # ID完全一致（最優先）
-                'textarea[name="message"]',  # name完全一致
-                'textarea',
-                'textarea[name*="message"]',
-                'textarea[name*="inquiry"]',
-                'textarea[id*="message"]',
-            ]
-            if self._fill_field(page, message_selectors, message_data.get('message', '')):
-                fields_filled.append('message')
+            # AI解析結果がある場合は解析結果ベースで入力
+            if form_fields:
+                print(f"🤖 AI解析結果を使用して入力 ({len(form_fields)}フィールド)")
+                fields_filled = self._fill_with_analysis(page, form_fields, message_data)
+            else:
+                # フォールバック: 従来のセレクタベース入力
+                print(f"⚠️ 解析結果なし - フォールバックモードで実行")
+                fields_filled = self._fill_with_fallback(page, message_data)
             
             print(f"✅ フィールドに入力しました: {', '.join(fields_filled)}")
             
@@ -310,6 +261,243 @@ class FormAutomationService:
                 continue
         
         print(f"❌ 全セレクタで失敗\n")
+        return False
+    
+    def _fill_with_analysis(self, page: Page, form_fields: list, message_data: Dict) -> list:
+        """
+        AI解析結果を使って入力
+        
+        Args:
+            page: Playwrightページ
+            form_fields: AI解析結果のフォームフィールド情報
+            message_data: 入力データ
+        
+        Returns:
+            入力成功したフィールド名リスト
+        """
+        fields_filled = []
+        
+        # field_category -> message_dataキーのマッピング
+        category_to_data = {
+            'full_name': message_data.get('name', ''),
+            'name': message_data.get('name', ''),
+            'email': message_data.get('email', ''),
+            'phone': message_data.get('phone', ''),
+            'company': message_data.get('company', ''),
+            'message': message_data.get('message', ''),
+            'inquiry': message_data.get('message', ''),
+            'content': message_data.get('message', ''),
+            'subject': message_data.get('subject', 'お問い合わせ'),
+            'title': message_data.get('subject', 'お問い合わせ'),
+            # 部長/担当者名
+            'department': message_data.get('department', ''),
+            'position': message_data.get('position', ''),
+            # ふりがな（name_kana）
+            'name_kana': message_data.get('name_kana', ''),
+            'full_name_kana': message_data.get('name_kana', ''),
+            'last_name_kana': message_data.get('last_name_kana', ''),
+            'first_name_kana': message_data.get('first_name_kana', ''),
+        }
+        
+        for field in form_fields:
+            field_name = field.get('name') or field.get('id')
+            field_id = field.get('id')
+            field_type = field.get('type', 'input')
+            category = field.get('field_category', 'unknown')
+            label = field.get('label', '')
+            
+            # ラベルからカテゴリを推測（AI誤分類対策）
+            if category in ['other', 'unknown', '']:
+                category = self._infer_category_from_label(label, field_name)
+                if category not in ['other', 'unknown']:
+                    print(f"  🔄 ラベルからカテゴリ補正: {field_name} ({label}) → {category}")
+            
+            # チェックボックスはスキップ（別処理が必要）
+            if field_type == 'checkbox':
+                continue
+            
+            # セレクトボックスは別処理
+            if field_type == 'select':
+                # 種別/お問い合わせ先セレクトの場合、最初の有効な選択肢を選ぶ
+                if category in ['subject', 'inquiry_type'] or '種別' in label or 'お問い合わせ' in label:
+                    if self._select_first_valid_option(page, field_name, field_id):
+                        fields_filled.append(category)
+                continue
+            
+            # カテゴリから入力値を取得
+            value = category_to_data.get(category, '')
+            
+            if not value:
+                continue
+            
+            # セレクタを構築（解析結果のname/idを最優先）
+            tag = 'textarea' if field_type == 'textarea' else 'input'
+            selectors = []
+            
+            if field_name:
+                selectors.append(f'{tag}[name="{field_name}"]')
+            if field_id and field_id != field_name:
+                selectors.append(f'{tag}[id="{field_id}"]')
+            if field_name:
+                selectors.append(f'{tag}[name*="{field_name}"]')
+                selectors.append(f'{tag}[id*="{field_name}"]')
+            
+            # 入力試行
+            if self._fill_field(page, selectors, value):
+                fields_filled.append(category)
+        
+        return fields_filled
+    
+    def _fill_with_fallback(self, page: Page, message_data: Dict) -> list:
+        """
+        従来のセレクタベースで入力（フォールバック）
+        
+        Args:
+            page: Playwrightページ
+            message_data: 入力データ
+        
+        Returns:
+            入力成功したフィールド名リスト
+        """
+        fields_filled = []
+        
+        # 会社名フィールド（先に入力）
+        company_selectors = [
+            'input#company',
+            'input[name="company"]',
+            'input[id*="company"]',
+            'input[name*="company"]',
+            'input[placeholder*="会社"]',
+            'input[placeholder*="企業"]',
+        ]
+        if self._fill_field(page, company_selectors, message_data.get('company', '')):
+            fields_filled.append('company')
+        
+        # 名前フィールド
+        name_selectors = [
+            'input#name',
+            'input[name="name"]',
+            'input[id*="name"][id*="name"]:not([id*="company"]):not([id*="user"])',
+            'input[placeholder*="名前"]',
+            'input[placeholder*="お名前"]',
+        ]
+        if self._fill_field(page, name_selectors, message_data.get('name', '')):
+            fields_filled.append('name')
+        
+        # メールフィールド
+        email_selectors = [
+            'input#email',
+            'input[name="email"]',
+            'input[type="email"]',
+            'input[name*="email"]',
+            'input[name*="mail"]',
+            'input[id*="email"]',
+        ]
+        if self._fill_field(page, email_selectors, message_data.get('email', '')):
+            fields_filled.append('email')
+        
+        # 電話番号フィールド
+        phone_selectors = [
+            'input#phone',
+            'input[name="phone"]',
+            'input[type="tel"]',
+            'input[name*="phone"]',
+            'input[name*="tel"]',
+            'input[id*="phone"]',
+        ]
+        if message_data.get('phone'):
+            if self._fill_field(page, phone_selectors, message_data.get('phone')):
+                fields_filled.append('phone')
+        
+        # メッセージフィールド
+        message_selectors = [
+            'textarea#message',
+            'textarea[name="message"]',
+            'textarea',
+            'textarea[name*="message"]',
+            'textarea[name*="inquiry"]',
+            'textarea[id*="message"]',
+        ]
+        if self._fill_field(page, message_selectors, message_data.get('message', '')):
+            fields_filled.append('message')
+        
+        return fields_filled
+    
+    def _infer_category_from_label(self, label: str, field_name: str) -> str:
+        """
+        ラベルからカテゴリを推測（AI誤分類のフォールバック）
+        
+        Args:
+            label: フィールドのラベル
+            field_name: フィールド名
+        
+        Returns:
+            推測されたカテゴリ
+        """
+        text = (label + ' ' + field_name).lower()
+        
+        # ルールベースのマッピング
+        # プライバシー・同意系（チェックボックス用）
+        if 'プライバシー' in text or 'privacy' in text or '個人情報' in text:
+            return 'privacy_agreement'
+        if '利用規約' in text or 'terms' in text or '規約に同意' in text:
+            return 'terms_agreement'
+        # ふりがな（name_kanaより先に判定）
+        if 'ふりがな' in text or 'フリガナ' in text or 'kana' in text or 'furi' in text or 'カナ' in text or 'furigana' in text:
+            return 'name_kana'
+        if '会社' in text or 'company' in text or '企業' in text or '法人' in text or '貴社' in text:
+            return 'company'
+        if 'メール' in text or 'email' in text or 'mail' in text:
+            return 'email'
+        if '電話' in text or 'tel' in text or 'phone' in text:
+            return 'phone'
+        if '名前' in text or 'お名前' in text or '氏名' in text:
+            return 'full_name'
+        if 'メッセージ' in text or '内容' in text or '本文' in text or '問い合わせ内容' in text:
+            return 'message'
+        if '件名' in text or 'タイトル' in text or 'subject' in text:
+            return 'subject'
+        if '種別' in text or 'お問い合わせ先' in text:
+            return 'inquiry_type'
+        
+        return 'other'
+    
+    def _select_first_valid_option(self, page: Page, field_name: str, field_id: str) -> bool:
+        """
+        セレクトボックスで最初の有効な選択肢を選ぶ
+        
+        Args:
+            page: Playwrightページ
+            field_name: フィールド名
+            field_id: フィールドID
+        
+        Returns:
+            成功したか
+        """
+        selectors = []
+        if field_name:
+            selectors.append(f'select[name="{field_name}"]')
+        if field_id and field_id != field_name:
+            selectors.append(f'select[id="{field_id}"]')
+        
+        for selector in selectors:
+            try:
+                select_element = page.locator(selector)
+                if select_element.count() > 0:
+                    # 選択肢を取得
+                    options = select_element.locator('option').all()
+                    for option in options:
+                        value = option.get_attribute('value')
+                        text = option.inner_text()
+                        # 空値や「選択してください」をスキップ
+                        if value and value.strip() and '選択' not in text:
+                            select_element.select_option(value=value)
+                            print(f"  ✅ セレクト選択: {selector} → {text}")
+                            return True
+            except Exception as e:
+                print(f"  ⚠️ セレクト選択失敗: {selector} - {e}")
+                continue
+        
         return False
     
     def _check_recaptcha(self, page: Page) -> bool:

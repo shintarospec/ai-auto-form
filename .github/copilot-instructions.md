@@ -1,5 +1,10 @@
 # AI AutoForm - Copilot Instructions
 
+## ⚠️ 最重要：現状把握
+**最新のシステム状態は必ず `docs/CURRENT_STATE.md` を参照してください。**
+- システム状態、DB構成、MCF一覧、TODO管理を記載
+- 毎セッション更新される最新情報
+
 ## 🎯 MVP戦略（最重要）
 
 このプロジェクトは**MVP（Minimum Viable Product）戦略**を採用しています。
@@ -100,10 +105,12 @@ ssh root@153.126.154.158  # 使用禁止
 
 開発時は以下のドキュメントを優先的に参照：
 
-1. **HANDOFF.md** - 現在の完成状態
-2. **PROJECT_SPEC.md** - プロジェクト全体仕様
-3. **docs/DEEPBIZ_INTEGRATION.md** - DeepBiz連携仕様
-4. **docs/ARCHITECTURE.md** - システムアーキテクチャ
+1. **docs/CURRENT_STATE.md** ⭐ - システム状態、TODO、MCF（**毎セッション必ず確認**）
+2. **docs/MVP_SPEC.md** ⭐ - 機能一覧、ユーザーストーリー、完成基準
+3. **docs/FORM_AUTOMATION_SPEC.md** ⭐ - フォーム解析・AI入力仕様（field_category、ルール拡張方法）
+4. **docs/AI_DEVELOPMENT_OPERATIONS_GUIDE.md** - AI駆動開発の運用ルール
+5. **PROJECT_SPEC.md** - プロジェクト初期仕様（参考）
+6. **docs/ARCHITECTURE.md** - システムアーキテクチャ
 
 ## 開発方針（MVP戦略に基づく）
 
@@ -129,6 +136,13 @@ ssh root@153.126.154.158  # 使用禁止
 ### Flask再起動の確実な手順
 
 **問題**: コード変更後にFlaskを再起動しても、Pythonキャッシュやインポート済みモジュールにより変更が反映されないことがある
+
+**⚠️ Flask起動の絶対ルール**:
+- ❌ **絶対禁止**: `python backend/app.py`（仮想環境なし）
+- ❌ **絶対禁止**: `python3 backend/app.py`（仮想環境なし）  
+- ✅ **正しい方法**: `bash start-flask.sh`（仮想環境使用）
+
+**理由**: VPSはUbuntu 24.04でPEP 668対応のため、仮想環境必須。`start-flask.sh`は`source venv/bin/activate`を含む。
 
 **解決策**: 以下の確実な手順を必ず実行
 

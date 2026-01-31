@@ -89,6 +89,9 @@ class Product(Base):
     sender_inquiry_title = Column(String(500))  # お問い合わせタイトル
     sender_inquiry_detail = Column(Text)  # お問い合わせ詳細
     
+    # 自動入力設定
+    inquiry_type_priority = Column(String(500))  # 種別優先キーワード（カンマ区切り）例: その他,一般,お問い合わせ
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     
     tasks = relationship('Task', back_populates='product')
@@ -137,7 +140,9 @@ class Product(Base):
             'sender_address': self.sender_address,
             # お問い合わせ
             'sender_inquiry_title': self.sender_inquiry_title,
-            'sender_inquiry_detail': self.sender_inquiry_detail
+            'sender_inquiry_detail': self.sender_inquiry_detail,
+            # 自動入力設定
+            'inquiry_type_priority': self.inquiry_type_priority
         }
 
 
@@ -155,6 +160,12 @@ class Task(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime)
     
+    # Phase 2-B: ハイブリッド自動化対応
+    automation_type = Column(String(20), default='manual')  # 'auto' or 'manual'
+    recaptcha_type = Column(String(20))  # 'v2', 'v3', 'none', None（未分析）
+    estimated_time = Column(Integer)  # 推定処理時間（秒）
+    form_analysis = Column(JSON)  # フォーム解析結果 JSONB
+    
     company = relationship('Company', back_populates='tasks')
     product = relationship('Product', back_populates='tasks')
     
@@ -170,5 +181,10 @@ class Task(Base):
             'screenshot_path': self.screenshot_path,
             'submitted': self.submitted,
             'created_at': self.created_at.isoformat() if self.created_at else None,
-            'completed_at': self.completed_at.isoformat() if self.completed_at else None
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            # Phase 2-B
+            'automation_type': self.automation_type,
+            'recaptcha_type': self.recaptcha_type,
+            'estimated_time': self.estimated_time,
+            'form_analysis': self.form_analysis
         }

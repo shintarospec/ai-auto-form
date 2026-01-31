@@ -1,0 +1,297 @@
+"""
+AI AutoForm - Auto Executor Service
+automation_type='auto'のタスクを完全自動実行
+
+Modified: 2026-01-29 - asyncio対応（Flask互換性修正）
+"""
+
+import asyncio
+import time
+import threading
+import os
+from typing import Dict, Optional
+from datetime import datetime
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+from backend.database import get_db_session
+from backend.simple_models import Task, Company, Product
+
+# 設定定数
+EXECUTION_TIMEOUT = 120  # タスク実行タイムアウト（秒）
+MAX_RETRIES = 3  # 最大リトライ回数
+RETRY_DELAY = 5  # リトライ間隔（秒）
+
+# タスク実行ロック（重複実行防止）
+_task_locks: Dict[int, threading.Lock] = {}
+_lock_manager = threading.Lock()
+
+
+def _get_task_lock(task_id: int) -> threading.Lock:
+    """タスクIDごとのロックを取得（なければ作成）"""
+    with _lock_manager:
+        if task_id not in _task_locks:
+            _task_locks[task_id] = threading.Lock()
+        return _task_locks[task_id]
+
+
+class AutoExecutor:
+    """自動実行サービス（reCAPTCHA無しフォーム専用）- Async版"""
+    
+    def __init__(self, headless: bool = False, display: Optional[str] = ":1",
+                 timeout: int = EXECUTION_TIMEOUT, max_retries: int = MAX_RETRIES):
+        self.headless = headless
+        self.display = display
+        self.timeout = timeout
+        self.max_retries = max_retries
+        
+    async def execute_task(self, task_id: int) -> Dict:
+        """タスクを自動実行（ロック機構・リトライ付き）"""
+        # ロック取得（重複実行防止）
+        task_lock = _get_task_lock(task_id)
+        if not task_lock.acquire(blocking=False):
+            return {
+                'success': False,
+                'task_id': task_id,
+                'status': 'locked',
+                'execution_time': 0,
+                'screenshots': [],
+                'error_message': f'タスク {task_id} は現在実行中です',
+                'executed_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'retry_count': 0
+            }
+        
+        try:
+            last_error = None
+            for retry_count in range(self.max_retries):
+                if retry_count > 0:
+                    print(f"🔄 リトライ {retry_count}/{self.max_retries}: Task#{task_id}")
+                    await asyncio.sleep(RETRY_DELAY)
+                
+                result = await self._execute_task_internal(task_id, retry_count)
+                
+                if result['success']:
+                    return result
+                
+                last_error = result.get('error_message')
+                
+                if 'タイムアウト' in str(last_error) or '対象外' in str(last_error):
+                    break
+            
+            result['error_message'] = f"全{self.max_retries}回のリトライ失敗: {last_error}"
+            return result
+            
+        finally:
+            task_lock.release()
+    
+    async def _execute_task_internal(self, task_id: int, retry_count: int = 0) -> Dict:
+        """タスク実行の内部処理（Async版）"""
+        start_time = time.time()
+        result = {
+            'success': False,
+            'task_id': task_id,
+            'status': 'failed',
+            'execution_time': 0,
+            'screenshots': [],
+            'error_message': None,
+            'executed_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'retry_count': retry_count
+        }
+        
+        db = None
+        try:
+            deadline = start_time + self.timeout
+            db = get_db_session()
+            
+            task = db.query(Task).filter(Task.id == task_id).first()
+            if not task:
+                raise ValueError(f"タスクID {task_id} が見つかりません")
+            
+            company = db.query(Company).filter(Company.id == task.company_id).first()
+            product = db.query(Product).filter(Product.id == task.product_id).first()
+            
+            if not company or not product:
+                raise ValueError("企業または案件が見つかりません")
+            
+            print(f"🤖 自動実行開始: Task#{task_id} | {company.name} | {company.form_url}")
+            
+            if task.automation_type != 'auto':
+                raise ValueError(f"このタスクは自動実行対象外です (automation_type={task.automation_type})")
+            
+            if task.recaptcha_type == 'v2':
+                raise ValueError("reCAPTCHA v2が検出されているため自動実行できません")
+            
+            task.status = 'processing'
+            db.commit()
+            
+            form_data = task.form_data or {}
+            if not form_data:
+                form_data = {
+                    'company': product.sender_company or company.name,
+                    'name': product.sender_name or '営業担当',
+                    'email': product.sender_email or 'info@example.com',
+                    'phone': product.sender_phone or '03-0000-0000',
+                    'message': f"{product.name}に関するお問い合わせ"
+                }
+            
+            print(f"📝 入力データ: {list(form_data.keys())}")
+            
+            if self.display:
+                os.environ['DISPLAY'] = self.display
+            
+            async with async_playwright() as p:
+                browser = None
+                try:
+                    browser = await p.chromium.launch(
+                        headless=self.headless,
+                        args=['--disable-blink-features=AutomationControlled',
+                              '--disable-dev-shm-usage', '--no-sandbox']
+                    )
+                    print(f"✅ ブラウザ起動 (headless={self.headless})")
+                    
+                    page = await browser.new_page()
+                    await page.set_viewport_size({'width': 1280, 'height': 720})
+                    
+                    if time.time() > deadline:
+                        raise TimeoutError(f"タイムアウト: {self.timeout}秒を超過しました")
+                    
+                    print(f"🌐 ページ遷移: {company.form_url}")
+                    await page.goto(company.form_url, wait_until='domcontentloaded', timeout=30000)
+                    await asyncio.sleep(2)
+                    
+                    fill_success = await self._fill_form_fields(page, form_data)
+                    
+                    if fill_success:
+                        result['success'] = True
+                        result['status'] = 'completed'
+                        task.status = 'completed'
+                        task.completed_at = datetime.now()
+                        db.commit()
+                        print(f"✅ 自動実行完了: Task#{task_id}")
+                    else:
+                        raise Exception("フォーム入力に失敗しました")
+                        
+                finally:
+                    if browser:
+                        await browser.close()
+                        print("✅ ブラウザ終了")
+            
+        except TimeoutError as e:
+            result['error_message'] = str(e)
+            print(f"⏰ タイムアウト: Task#{task_id} - {e}")
+            self._update_task_status(db, task_id, 'failed')
+                    
+        except Exception as e:
+            result['error_message'] = str(e)
+            print(f"❌ 自動実行エラー: Task#{task_id} - {e}")
+            if db:
+                status = 'pending' if retry_count < self.max_retries - 1 else 'failed'
+                self._update_task_status(db, task_id, status)
+        finally:
+            if db:
+                db.close()
+            result['execution_time'] = time.time() - start_time
+            
+        return result
+    
+    async def _fill_form_fields(self, page, form_data: Dict) -> bool:
+        """フォームフィールドに入力"""
+        try:
+            for field_name, value in form_data.items():
+                if not value:
+                    continue
+                selectors = [
+                    f'input[name="{field_name}"]', f'input[id="{field_name}"]',
+                    f'textarea[name="{field_name}"]', f'textarea[id="{field_name}"]',
+                    f'input[name*="{field_name}"]', f'textarea[name*="{field_name}"]',
+                ]
+                filled = False
+                for selector in selectors:
+                    try:
+                        element = await page.query_selector(selector)
+                        if element:
+                            await element.fill(str(value))
+                            print(f"  ✅ {field_name}: 入力完了")
+                            filled = True
+                            break
+                    except:
+                        continue
+                if not filled:
+                    print(f"  ⚠️ {field_name}: フィールドが見つかりません")
+            return True
+        except Exception as e:
+            print(f"❌ フォーム入力エラー: {e}")
+            return False
+    
+    def _update_task_status(self, db, task_id: int, status: str):
+        """タスクステータスを更新"""
+        try:
+            if db:
+                task = db.query(Task).filter(Task.id == task_id).first()
+                if task:
+                    task.status = status
+                    db.commit()
+        except Exception as e:
+            print(f"⚠️ ステータス更新失敗: {e}")
+    
+    async def execute_batch(self, company_id: int, limit: int = 10) -> Dict:
+        """企業の自動実行可能タスクを一括実行"""
+        start_time = time.time()
+        result = {
+            'success': False, 'company_id': company_id,
+            'total_tasks': 0, 'completed': 0, 'failed': 0,
+            'results': [], 'execution_time': 0
+        }
+        
+        db = None
+        try:
+            db = get_db_session()
+            tasks = db.query(Task).filter(
+                Task.company_id == company_id,
+                Task.automation_type == 'auto',
+                Task.status == 'pending'
+            ).order_by(Task.id).limit(limit).all()
+            
+            task_ids = [task.id for task in tasks]
+            result['total_tasks'] = len(task_ids)
+            
+            if not task_ids:
+                result['success'] = True
+                print(f"ℹ️ 企業ID {company_id} に自動実行可能タスクがありません")
+                db.close()
+                return result
+            
+            print(f"🤖 バッチ実行開始: 企業ID {company_id} | {len(task_ids)}タスク")
+            db.close()
+            db = None
+            
+            for task_id in task_ids:
+                task_result = await self.execute_task(task_id)
+                result['results'].append(task_result)
+                if task_result['success']:
+                    result['completed'] += 1
+                else:
+                    result['failed'] += 1
+                await asyncio.sleep(2)
+            
+            result['success'] = True
+            print(f"✅ バッチ実行完了: 完了={result['completed']}, 失敗={result['failed']}")
+        except Exception as e:
+            result['error_message'] = str(e)
+            print(f"❌ バッチ実行エラー: 企業ID {company_id} - {e}")
+        finally:
+            if db:
+                db.close()
+            result['execution_time'] = time.time() - start_time
+        return result
+
+
+# 同期版ラッパー（Flask用）
+def execute_task_sync(task_id: int, headless: bool = False, display: str = ":99") -> Dict:
+    """同期的にタスクを自動実行（Flask用ラッパー）"""
+    executor = AutoExecutor(headless=headless, display=display)
+    return asyncio.run(executor.execute_task(task_id))
+
+
+def execute_batch_sync(company_id: int, limit: int = 10, headless: bool = False, display: str = ":99") -> Dict:
+    """同期的にバッチ実行（Flask用ラッパー）"""
+    executor = AutoExecutor(headless=headless, display=display)
+    return asyncio.run(executor.execute_batch(company_id, limit))

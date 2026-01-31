@@ -21,10 +21,11 @@ sleep 2
 echo "🗑️  Pythonキャッシュを削除中..."
 ssh ubuntu@153.126.154.158 'cd /opt/ai-auto-form && find . -name "*.pyc" -delete && find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null; echo "キャッシュ削除完了"'
 
-# 4. Flask起動
+# 4. Flask起動（仮想環境を使用するためstart-flask.shを必ず使う）
 echo "🚀 Flaskを起動中..."
 ssh ubuntu@153.126.154.158 'cd /opt/ai-auto-form && bash start-flask.sh'
-sleep 3
+sleep 5
+echo "⏳ Flask初期化待機中..."
 
 # 5. 起動確認
 echo "✅ プロセス確認中..."

@@ -48,6 +48,14 @@
    - Phase 1 MVPの実装を崩さない
    - 既存のsimple_*モデルを基準にする
 
+4. **Flask起動の鉄則（重要）**
+   - ❌ **絶対禁止**: `python backend/app.py`（仮想環境なし）
+   - ❌ **絶対禁止**: `python3 backend/app.py`（仮想環境なし）
+   - ✅ **正しい方法**: `bash start-flask.sh`（仮想環境使用）
+   - 理由: VPSはUbuntu 24.04でPEP 668対応のため、仮想環境必須
+   - 仮想環境パス: `/opt/ai-auto-form/venv/bin/python`
+   - start-flask.shは`source venv/bin/activate`を含む
+
 4. **禁止事項**
    - 既存テーブル構造の勝手な変更
    - 新しいORMライブラリの導入（SQLAlchemyで統一）

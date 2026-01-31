@@ -42,30 +42,19 @@ http://153.126.154.158:6080/vnc.html
 
 ## 📚 ドキュメント
 
-### 🎯 まず最初に読むべきドキュメント
+### 🎯 まず最初に読むべきドキュメント（AI開発運用ガイド準拠）
 
-- **[HANDOFF.md](HANDOFF.md)** ⭐ - 新チャット引き継ぎ文書（現在の状態、直近の作業）
-- **[PROJECT_SPEC.md](PROJECT_SPEC.md)** ⭐ - 全体の企画・仕様書（プロジェクトの目的、システム構成、機能仕様）
-- **[DEVELOPMENT_LOG.md](DEVELOPMENT_LOG.md)** ⭐ - 開発作業ログ（これまでの経緯、問題と解決方法）
+- **[docs/CURRENT_STATE.md](docs/CURRENT_STATE.md)** ⭐⭐ - システム状態、TODO、MCF（**毎セッション確認**）
+- **[docs/MVP_SPEC.md](docs/MVP_SPEC.md)** ⭐⭐ - 機能一覧、ユーザーストーリー、完成基準
+- **[docs/AI_DEVELOPMENT_OPERATIONS_GUIDE.md](docs/AI_DEVELOPMENT_OPERATIONS_GUIDE.md)** ⭐ - AI駆動開発の運用ルール
+- **[.github/copilot-instructions.md](.github/copilot-instructions.md)** ⭐ - AIアシスタント用指示書（プロジェクトルール）
 
-### 📖 Phase 2-A MVP（現在完成）
+### 📖 参考ドキュメント
 
-- **[HANDOFF_NEXT_PHASE2.md](HANDOFF_NEXT_PHASE2.md)** - Phase 2-B以降の詳細計画
-- **[HANDOFF_NEXT_CHAT.md](HANDOFF_NEXT_CHAT.md)** - 次回チャット用引き継ぎ（再起動手順、次のステップ）
-
-### 🚀 VPS環境構築（Phase 2準備）
-
-- **[VPS_SETUP_GUIDE.md](VPS_SETUP_GUIDE.md)** ⭐ - VPS初期セットアップガイド（詳細な手順）
-- **[VPS_DEPLOYMENT.md](VPS_DEPLOYMENT.md)** - VPSデプロイ手順（本番環境構築）
-- **[VPS_MIGRATION_CHECKLIST.md](VPS_MIGRATION_CHECKLIST.md)** - 移行チェックリスト
-
-### 🔬 技術仕様
-
-- **[HANDOFF.md](HANDOFF.md)** - VNC統合の技術仕様（Phase 2で使用）
-- **[API.md](docs/API.md)** - API仕様、エンドポイント一覧、データモデル
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - システムアーキテクチャ、技術スタック
-- **[WORKFLOW.md](docs/WORKFLOW.md)** - 管理者・作業者の操作手順
-- **[CHANGELOG.md](docs/CHANGELOG.md)** - バージョン履歴、変更内容
+- **[docs/FORM_AUTOMATION_SPEC.md](docs/FORM_AUTOMATION_SPEC.md)** ⭐ - フォーム解析・自動入力仕様書（AI解析・ルールベース入力の詳細）
+- **[PROJECT_SPEC.md](PROJECT_SPEC.md)** - 企画・仕様書（初期設計の記録）
+- **[HANDOFF.md](HANDOFF.md)** - 引き継ぎ文書（参照用、最新はCURRENT_STATE.md）
+- **[docs/Hybrid_Automation_Proposal.md](docs/Hybrid_Automation_Proposal.md)** - ハイブリッド自動化提案書（Phase 2-B計画）
 
 ---
 

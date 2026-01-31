@@ -9,5 +9,7 @@ fi
 
 export PYTHONPATH=/opt/ai-auto-form
 export PORT=5001
-nohup python backend/app.py > flask.log 2>&1 &
+export PYTHONUNBUFFERED=1  # print出力をバッファリングせずにログに出力
+# 仮想環境のPythonを明示的に使用
+nohup ./venv/bin/python backend/app.py > flask.log 2>&1 &
 echo "Flask started with PID: $!"

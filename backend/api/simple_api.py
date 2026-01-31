@@ -13,6 +13,8 @@ import os
 import asyncio
 from playwright.async_api import async_playwright
 from backend.services.gemini_service import GeminiService
+from backend.services.form_analyzer import analyze_form_sync
+from backend.services.auto_executor import execute_task_sync, execute_batch_sync
 
 simple_bp = Blueprint('simple', __name__, url_prefix='/api/simple')
 
@@ -294,6 +296,115 @@ def get_companies():
         db.close()
 
 
+@simple_bp.route('/companies/import-csv', methods=['POST'])
+def import_companies_csv():
+    """
+    企業データをCSVからインポート
+    
+    CSVフォーマット:
+    id,name,website_url,form_url,industry,google_place_id,description,employee_count,established_year,capital
+    
+    idが指定されている場合はそのIDを使用（DeepBizとのID統一用）
+    google_place_idまたはidが一致する場合は更新、なければ新規作成
+    """
+    import csv
+    import io
+    
+    db = get_db_session()
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'CSVファイルが必要です'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'ファイルが選択されていません'}), 400
+        
+        if not file.filename.endswith('.csv'):
+            return jsonify({'error': 'CSVファイルのみ対応しています'}), 400
+        
+        # CSVを読み込み
+        stream = io.StringIO(file.stream.read().decode('utf-8-sig'))  # BOM対応
+        reader = csv.DictReader(stream)
+        
+        created = 0
+        updated = 0
+        skipped = 0
+        errors = []
+        
+        for row_num, row in enumerate(reader, start=2):
+            try:
+                # 必須フィールドチェック
+                name = row.get('name', '').strip()
+                if not name:
+                    errors.append(f"行{row_num}: 企業名が空です")
+                    skipped += 1
+                    continue
+                
+                # DeepBiz IDを取得（指定されていれば使用）
+                deepbiz_id = row.get('id', '').strip()
+                deepbiz_id = int(deepbiz_id) if deepbiz_id else None
+                
+                # 既存企業を検索
+                existing = None
+                
+                # IDで検索（DeepBiz ID統一）
+                if deepbiz_id:
+                    existing = db.query(Company).filter(Company.id == deepbiz_id).first()
+                
+                # 企業名でも検索
+                if not existing:
+                    existing = db.query(Company).filter(Company.name == name).first()
+                
+                # データ準備（Companyモデルに存在するフィールドのみ）
+                company_data = {
+                    'name': name,
+                    'website_url': row.get('website_url', '').strip() or 'https://example.com',  # デフォルト値
+                    'form_url': row.get('form_url', row.get('inquiry_url', row.get('contact_form_url', ''))).strip() or 'https://example.com/contact',  # デフォルト値
+                    'industry': row.get('industry', '').strip() or None,
+                }
+                
+                if existing:
+                    # 更新
+                    for key, value in company_data.items():
+                        if value is not None:
+                            setattr(existing, key, value)
+                    updated += 1
+                else:
+                    # 新規作成
+                    company = Company(**company_data)
+                    
+                    # DeepBiz IDが指定されている場合は使用
+                    if deepbiz_id:
+                        company.id = deepbiz_id
+                    
+                    db.add(company)
+                    db.flush()  # IDを確定させる
+                    created += 1
+                
+            except Exception as e:
+                errors.append(f"行{row_num}: {str(e)}")
+                skipped += 1
+        
+        db.commit()
+        
+        return jsonify({
+            'success': True,
+            'created': created,
+            'updated': updated,
+            'skipped': skipped,
+            'errors': errors[:10],  # 最初の10件のみ
+            'message': f'インポート完了: 新規{created}件、更新{updated}件、スキップ{skipped}件'
+        })
+        
+    except Exception as e:
+        db.rollback()
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
 @simple_bp.route('/products', methods=['GET'])
 def get_products():
     """案件・商材一覧を取得"""
@@ -377,7 +488,9 @@ def create_product():
             sender_address=data.get('sender_address'),
             # お問い合わせ
             sender_inquiry_title=data.get('sender_inquiry_title'),
-            sender_inquiry_detail=data.get('sender_inquiry_detail')
+            sender_inquiry_detail=data.get('sender_inquiry_detail'),
+            # 自動入力設定
+            inquiry_type_priority=data.get('inquiry_type_priority')
         )
         
         db.add(product)
@@ -464,11 +577,20 @@ def execute_task(task_id):
             print(f"   email: '{message_data.get('email', 'N/A')}'")
             print(f"   message長: {len(message_data.get('message', ''))}文字\n")
             
-            # フォーム自動入力実行
+            # AI解析結果のフォームフィールド情報を取得
+            form_fields = None
+            if task.form_analysis and 'form_fields' in task.form_analysis:
+                form_fields = task.form_analysis['form_fields']
+                print(f"🤖 AI解析結果を使用: {len(form_fields)}フィールド")
+            else:
+                print(f"⚠️ AI解析結果なし - フォールバックモードで実行")
+            
+            # フォーム自動入力実行（form_fieldsを渡す）
             result = automation.fill_contact_form(
                 form_url=task.company.form_url,
                 message_data=message_data,
-                wait_for_captcha=True
+                wait_for_captcha=True,
+                form_fields=form_fields
             )
             
             automation.stop()
@@ -1014,6 +1136,8 @@ def update_product(product_id):
             product.sender_inquiry_title = data['sender_inquiry_title']
         if 'sender_inquiry_detail' in data:
             product.sender_inquiry_detail = data['sender_inquiry_detail']
+        if 'inquiry_type_priority' in data:
+            product.inquiry_type_priority = data['inquiry_type_priority']
         
         db.commit()
         
@@ -1032,7 +1156,7 @@ def update_product(product_id):
 
 @simple_bp.route('/tasks/<int:task_id>', methods=['PUT'])
 def update_task(task_id):
-    """タスクのメッセージを更新"""
+    """タスクのステータスとメッセージを更新"""
     db = get_db_session()
     try:
         task = db.query(Task).filter(Task.id == task_id).first()
@@ -1042,6 +1166,11 @@ def update_task(task_id):
         
         data = request.get_json()
         
+        # ステータス更新
+        if 'status' in data:
+            task.status = data['status']
+        
+        # メッセージ更新
         if 'message' in data:
             # form_dataを更新
             if task.form_data is None:
@@ -1272,3 +1401,431 @@ def migrate_add_extended_sender_info():
         return jsonify({'error': str(e)}), 500
     finally:
         db.close()
+
+
+# ===============================
+# Phase 2-B: ハイブリッド自動化マイグレーション
+# ===============================
+
+@simple_bp.route('/migrate/phase2b-automation', methods=['POST'])
+def migrate_phase2b_automation():
+    """
+    Phase 2-B: simple_tasksテーブルにハイブリッド自動化用カラムを追加
+    - automation_type: 'auto' or 'manual'
+    - recaptcha_type: 'v2', 'v3', 'none', NULL
+    - estimated_time: 推定処理時間（秒）
+    - form_analysis: フォーム解析結果（JSON）
+    """
+    db = get_db_session()
+    try:
+        print("🚀 Phase 2-B マイグレーション開始...")
+        
+        # 1. カラム追加
+        columns = [
+            "automation_type VARCHAR(20) DEFAULT 'manual'",
+            "recaptcha_type VARCHAR(20)",
+            "estimated_time INTEGER",
+            "form_analysis JSON"
+        ]
+        
+        for column_def in columns:
+            column_name = column_def.split()[0]
+            try:
+                # カラム存在確認
+                check_query = text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name='simple_tasks' 
+                    AND column_name=:column_name
+                """)
+                result = db.execute(check_query, {'column_name': column_name}).fetchone()
+                
+                if result:
+                    print(f"ℹ️ カラム '{column_name}' は既に存在します")
+                else:
+                    # カラム追加
+                    add_column = text(f"ALTER TABLE simple_tasks ADD COLUMN {column_def}")
+                    db.execute(add_column)
+                    print(f"✅ カラム '{column_name}' 追加成功")
+                    
+            except Exception as col_error:
+                print(f"⚠️ カラム '{column_name}' 処理エラー: {col_error}")
+        
+        # 2. 既存タスクにデフォルト値設定
+        update_query = text("""
+            UPDATE simple_tasks 
+            SET 
+                automation_type = 'manual',
+                estimated_time = 120
+            WHERE automation_type IS NULL
+        """)
+        result = db.execute(update_query)
+        updated_count = result.rowcount
+        
+        db.commit()
+        print(f"🎉 Phase 2-B マイグレーション完了！（{updated_count}件更新）")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Phase 2-B マイグレーション完了',
+            'columns_added': len(columns),
+            'tasks_updated': updated_count,
+            'details': {
+                'automation_type': 'デフォルト manual',
+                'recaptcha_type': '未分析（NULL）',
+                'estimated_time': 'デフォルト 120秒',
+                'form_analysis': '未分析（NULL）'
+            }
+        })
+        
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Phase 2-B マイグレーションエラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+# ===============================
+# Phase 2-B: FormAnalyzer API
+# ===============================
+
+@simple_bp.route('/analyze-form', methods=['POST'])
+def analyze_form():
+    """
+    フォームを事前分析してreCAPTCHAと構造を検出
+    
+    Request Body:
+        {
+            "form_url": "https://example.com/contact",
+            "company_id": 1 (optional)
+        }
+    
+    Response:
+        {
+            "success": true,
+            "analysis": {
+                "url": str,
+                "recaptcha_type": "v2" | "v3" | "none",
+                "has_recaptcha": bool,
+                "form_fields": [...],
+                "estimated_time": int
+            }
+        }
+    """
+    try:
+        data = request.get_json()
+        form_url = data.get('form_url')
+        company_id = data.get('company_id')
+        
+        if not form_url:
+            return jsonify({'error': 'form_urlが必要です'}), 400
+        
+        print(f"🔍 フォーム分析リクエスト: {form_url}")
+        
+        # フォーム分析実行
+        result = analyze_form_sync(form_url, headless=True, timeout=30000)
+        
+        # company_idが指定されていれば、企業情報を更新
+        if company_id and result['analysis_status'] == 'success':
+            db = get_db_session()
+            try:
+                company = db.query(Company).filter_by(id=company_id).first()
+                if company:
+                    # 企業の最後の分析結果としてメモ欄などに保存（将来的にカラム追加可能）
+                    print(f"✅ 企業 #{company_id} のフォーム分析完了")
+            finally:
+                db.close()
+        
+        return jsonify({
+            'success': result['analysis_status'] == 'success',
+            'analysis': result
+        })
+        
+    except Exception as e:
+        print(f"❌ フォーム分析エラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@simple_bp.route('/tasks/<int:task_id>/analyze', methods=['POST'])
+def analyze_task_form(task_id):
+    """
+    タスクのフォームを分析して結果をDBに保存
+    
+    Response:
+        {
+            "success": true,
+            "task_id": int,
+            "analysis": {...},
+            "automation_type": "auto" | "manual",
+            "updated": true
+        }
+    """
+    db = get_db_session()
+    try:
+        # タスク取得
+        task = db.query(Task).options(
+            joinedload(Task.company)
+        ).filter_by(id=task_id).first()
+        
+        if not task:
+            return jsonify({'error': 'タスクが見つかりません'}), 404
+        
+        form_url = task.company.form_url
+        print(f"🔍 タスク #{task_id} のフォーム分析: {form_url}")
+        
+        # フォーム分析実行
+        result = analyze_form_sync(form_url, headless=True, timeout=30000)
+        
+        if result['analysis_status'] != 'success':
+            return jsonify({
+                'success': False,
+                'error': result['error_message']
+            }), 500
+        
+        # 自動振り分けロジック
+        recaptcha_type = result['recaptcha_type']
+        if recaptcha_type == 'v2':
+            automation_type = 'manual'  # v2は手動対応必須
+        elif recaptcha_type == 'hubspot-iframe':
+            automation_type = 'manual'  # HubSpot Formsは手動対応必須
+        elif recaptcha_type in ['v3', 'none']:
+            automation_type = 'auto'  # v3/無しは自動可能
+        else:
+            automation_type = 'manual'  # 不明な場合は保守的に手動
+        
+        # タスク更新
+        task.automation_type = automation_type
+        task.recaptcha_type = recaptcha_type
+        task.estimated_time = result['estimated_time']
+        task.form_analysis = result
+        
+        db.commit()
+        
+        print(f"✅ タスク #{task_id} 分析完了: {automation_type} ({recaptcha_type}), 推定{result['estimated_time']}秒")
+        
+        return jsonify({
+            'success': True,
+            'task_id': task_id,
+            'analysis': result,
+            'automation_type': automation_type,
+            'recaptcha_type': recaptcha_type,
+            'estimated_time': result['estimated_time'],
+            'updated': True
+        })
+        
+    except Exception as e:
+        db.rollback()
+        print(f"❌ タスク分析エラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+@simple_bp.route('/companies/<int:company_id>/analyze-batch', methods=['POST'])
+def analyze_company_tasks_batch(company_id):
+    """
+    企業の全タスクを一括分析
+    
+    Response:
+        {
+            "success": true,
+            "company_id": int,
+            "total_tasks": int,
+            "analyzed": int,
+            "auto_tasks": int,
+            "manual_tasks": int,
+            "results": [...]
+        }
+    """
+    db = get_db_session()
+    try:
+        # 企業の全タスク取得
+        tasks = db.query(Task).options(
+            joinedload(Task.company)
+        ).filter_by(company_id=company_id, status='pending').all()
+        
+        if not tasks:
+            return jsonify({
+                'success': True,
+                'message': '分析対象のタスクがありません',
+                'total_tasks': 0
+            })
+        
+        form_url = tasks[0].company.form_url
+        print(f"🔍 企業 #{company_id} の{len(tasks)}件のタスクを一括分析")
+        
+        # フォーム分析（1回のみ実行）
+        result = analyze_form_sync(form_url, headless=True, timeout=30000)
+        
+        if result['analysis_status'] != 'success':
+            return jsonify({
+                'success': False,
+                'error': result['error_message']
+            }), 500
+        
+        # 自動振り分けロジック
+        recaptcha_type = result['recaptcha_type']
+        automation_type = 'manual' if recaptcha_type == 'v2' else 'auto'
+        
+        # 全タスクに適用
+        auto_count = 0
+        manual_count = 0
+        
+        for task in tasks:
+            task.automation_type = automation_type
+            task.recaptcha_type = recaptcha_type
+            task.estimated_time = result['estimated_time']
+            task.form_analysis = result
+            
+            if automation_type == 'auto':
+                auto_count += 1
+            else:
+                manual_count += 1
+        
+        db.commit()
+        
+        print(f"✅ 企業 #{company_id} 一括分析完了: 自動{auto_count}件, 手動{manual_count}件")
+        
+        return jsonify({
+            'success': True,
+            'company_id': company_id,
+            'total_tasks': len(tasks),
+            'analyzed': len(tasks),
+            'auto_tasks': auto_count,
+            'manual_tasks': manual_count,
+            'automation_type': automation_type,
+            'recaptcha_type': recaptcha_type,
+            'estimated_time': result['estimated_time'],
+            'analysis': result
+        })
+        
+    except Exception as e:
+        db.rollback()
+        print(f"❌ 一括分析エラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        db.close()
+
+
+# ===============================
+# Phase 2-B: AutoExecutor（自動実行）
+# ===============================
+
+@simple_bp.route('/tasks/<int:task_id>/auto-execute', methods=['POST'])
+def auto_execute_task(task_id):
+    """
+    タスクを自動実行（automation_type='auto'のみ）
+    
+    Request Body（オプション）:
+    {
+        "headless": false,  # VNC表示する場合はfalse
+        "display": ":1"     # VNC DISPLAY番号
+    }
+    
+    Response:
+    {
+        "success": true,
+        "task_id": 11,
+        "status": "completed",  # or "failed"
+        "execution_time": 15.3,
+        "screenshots": ["debug_screenshots/panel_debug_*.png", ...],
+        "error_message": null,
+        "executed_at": "2026-01-13 07:30:00"
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        headless = data.get('headless', False)  # デフォルトVNC表示
+        display = data.get('display', ':99')    # デフォルトVNC DISPLAY
+        
+        print(f"🤖 自動実行リクエスト: Task#{task_id} (headless={headless}, display={display})")
+        
+        # AutoExecutor実行
+        result = execute_task_sync(
+            task_id=task_id,
+            headless=headless,
+            display=display
+        )
+        
+        if result['success']:
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 500
+            
+    except Exception as e:
+        print(f"❌ 自動実行APIエラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@simple_bp.route('/companies/<int:company_id>/auto-execute-batch', methods=['POST'])
+def auto_execute_batch(company_id):
+    """
+    企業の自動実行可能タスクを一括実行
+    
+    Request Body（オプション）:
+    {
+        "limit": 10,        # 最大実行件数
+        "headless": false,  # VNC表示する場合はfalse
+        "display": ":1"     # VNC DISPLAY番号
+    }
+    
+    Response:
+    {
+        "success": true,
+        "company_id": 1,
+        "total_tasks": 5,
+        "completed": 4,
+        "failed": 1,
+        "results": [
+            {
+                "success": true,
+                "task_id": 11,
+                "status": "completed",
+                "execution_time": 12.5,
+                ...
+            },
+            ...
+        ],
+        "execution_time": 65.2
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        limit = data.get('limit', 10)
+        headless = data.get('headless', False)
+        display = data.get('display', ':99')  # VNC DISPLAY :99
+        
+        print(f"🤖 バッチ実行リクエスト: Company#{company_id} (limit={limit}, headless={headless})")
+        
+        # バッチ実行
+        result = execute_batch_sync(
+            company_id=company_id,
+            limit=limit,
+            headless=headless,
+            display=display
+        )
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        print(f"❌ バッチ実行APIエラー: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

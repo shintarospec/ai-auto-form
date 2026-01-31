@@ -1,0 +1,4 @@
+name,website_url,form_url,industry,google_place_id,description,employee_count,established_year,capital
+株式会社サンプル1,https://example1.com,https://example1.com/contact,IT・ソフトウェア,ChIJN1t_tDeuEmsRUsoyG83frY4,中小企業向けクラウドサービス,50,2010,10000000
+株式会社サンプル2,https://example2.com,https://example2.com/inquiry,製造業,,製造業向けIoTソリューション,120,2005,50000000
+株式会社サンプル3,https://example3.com,https://example3.com/contact,小売業,,ECサイト運営,30,2015,5000000

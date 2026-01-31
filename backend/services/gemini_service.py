@@ -309,6 +309,229 @@ Webサイトのコンテンツ:
             print(f"Insight Generation Error: {e}")
             return "企業の特性に合わせて丁寧にアプローチしてください。"
 
+    def analyze_form_fields(self, form_html: str, form_url: str) -> Dict:
+        """
+        フォームのHTML構造をAIで解析し、フィールド情報を抽出
+        
+        Args:
+            form_html: フォームのHTML（input/textarea/select要素を含む）
+            form_url: フォームのURL（コンテキスト用）
+        
+        Returns:
+            {
+                "fields": [
+                    {
+                        "selector": "input[name='sei']",
+                        "name": "sei",
+                        "type": "text",
+                        "field_category": "last_name",
+                        "confidence": 0.95
+                    },
+                    ...
+                ],
+                "summary": "お問い合わせフォーム"
+            }
+        """
+        # HTMLを短縮（max_output_tokens超過を防ぐ）
+        form_html_truncated = form_html[:5000] if len(form_html) > 5000 else form_html
+        
+        prompt = f"""日本語Webフォームの入力フィールドを解析し、各フィールドのfield_categoryを判定してください。
+
+【フォームHTML（JSON形式）】
+{form_html_truncated}
+
+【出力形式】JSONのみ（説明不要）：
+{{"fields":[{{"name":"属性値","type":"input種別","label":"ラベル","field_category":"下記から選択"}}]}}
+
+【field_category一覧（この値のみ使用可能）】
+■ 名前系
+- last_name: 姓（ラベル例：姓、せい）
+- first_name: 名（ラベル例：名、めい）
+- full_name: 氏名（ラベル例：お名前、氏名、ご担当者名）
+- last_name_kana: 姓カナ（ラベル例：セイ、フリガナ(姓)）
+- first_name_kana: 名カナ（ラベル例：メイ、フリガナ(名)）
+- name_kana: ふりがな一体型（ラベル例：ふりがな、フリガナ、カナ、よみがな、name属性にfuri/kanaを含む）
+
+■ 連絡先
+- email: メールアドレス（ラベル例：メールアドレス、E-mail）
+- phone: 電話番号（ラベル例：電話番号、TEL、お電話番号）
+- phone1: 市外局番（3つに分割された電話の1番目）
+- phone2: 市内局番（3つに分割された電話の2番目）
+- phone3: 加入者番号（3つに分割された電話の3番目）
+
+■ 会社情報
+- company: 会社名・組織名（ラベル例：会社名、企業名、組織名、法人名、団体名）
+- department: 部署名（ラベル例：部署、部署名）
+- position: 役職（ラベル例：役職、肩書き）
+
+■ 住所系
+- zipcode: 郵便番号（一体型）
+- zipcode1: 郵便番号前半（3桁）
+- zipcode2: 郵便番号後半（4桁）
+- prefecture: 都道府県（selectで47都道府県を選択）
+- city: 市区町村
+- address: 住所・番地・建物名
+
+■ 問い合わせ関連
+- subject: お問い合わせ種別（ラベル例：お問い合わせ種別、お問い合わせ先、ご用件、カテゴリ）
+- message: 問い合わせ内容（ラベル例：お問い合わせ内容、内容、本文、ご質問）
+
+■ 同意・チェックボックス系
+- privacy_agreement: プライバシーポリシー同意（ラベル例：プライバシーポリシーに同意、個人情報の取り扱いに同意、Privacy Policy）
+- terms_agreement: 利用規約同意（ラベル例：利用規約に同意、規約に同意）
+- checkbox: その他のチェックボックス（メルマガ希望、ニュースレター購読など）
+
+■ その他
+- other: 上記のどれにも該当しない場合のみ使用
+
+【重要な判定ルール】
+1. **ラベルを最優先で判定** - labelフィールドの日本語を最優先で使う
+2. 「ふりがな」「フリガナ」「カナ」「よみがな」を含むラベル → name_kana
+3. name属性に「furi」「kana」を含む → name_kana
+4. selectで「お問い合わせ先」「種別」を選ぶ場合 → subject
+5. selectで都道府県（北海道〜沖縄県）を選ぶ場合 → prefecture
+6. 連続する名前フィールドは1番目=last_name、2番目=first_name
+7. 連続する電話番号フィールドは順にphone1、phone2、phone3
+8. **チェックボックス分類ルール**:
+   - 「プライバシー」「個人情報」「Privacy」を含む → privacy_agreement
+   - 「利用規約」「terms」を含む → terms_agreement
+   - 上記以外のチェックボックス → checkbox
+9. **otherは最後の手段** - 明らかに上記のどれにも該当しない場合のみ
+
+【禁止】上記以外のカテゴリ名は使用禁止。"""
+        
+        try:
+            response = self.model.generate_content(
+                prompt,
+                generation_config={
+                    'temperature': 0.0,  # 最も一貫性重視
+                    'max_output_tokens': 8000,
+                }
+            )
+            
+            result_text = response.text.strip()
+            
+            # マークダウンのコードブロックを削除
+            if result_text.startswith('```json'):
+                result_text = result_text[7:]
+            if result_text.startswith('```'):
+                result_text = result_text[3:]
+            if result_text.endswith('```'):
+                result_text = result_text[:-3]
+            
+            result_text = result_text.strip()
+            
+            try:
+                analysis = json.loads(result_text)
+            except json.JSONDecodeError as first_error:
+                # JSONが不完全な場合、修復を試みる
+                print(f"⚠️ JSON修復を試みます: {first_error}")
+                
+                # 方法1: 末尾の不完全なオブジェクトを削除
+                # 最後の完全なオブジェクト（}で終わる）を見つける
+                last_complete = result_text.rfind('},')
+                if last_complete > 0:
+                    # fieldsの配列を閉じる
+                    repaired = result_text[:last_complete+1] + '],"summary":"AI解析（修復）"}'
+                    try:
+                        analysis = json.loads(repaired)
+                        print(f"✅ JSON修復成功（方法1）")
+                    except json.JSONDecodeError:
+                        # 方法2: もっと前の完全なオブジェクトを探す
+                        for i in range(3):
+                            last_complete = result_text.rfind('},', 0, last_complete)
+                            if last_complete > 0:
+                                repaired = result_text[:last_complete+1] + '],"summary":"AI解析（修復）"}'
+                                try:
+                                    analysis = json.loads(repaired)
+                                    print(f"✅ JSON修復成功（方法2-{i+1}）")
+                                    break
+                                except:
+                                    continue
+                        else:
+                            raise first_error
+                else:
+                    raise first_error
+            
+            print(f"✅ AI フォーム解析完了: {len(analysis.get('fields', []))}フィールド検出")
+            return analysis
+            
+        except json.JSONDecodeError as e:
+            print(f"❌ AI解析結果のJSONパースエラー: {e}")
+            # デバッグ用：レスポンスの最後200文字を出力
+            print(f"   レスポンス末尾: ...{result_text[-200:] if len(result_text) > 200 else result_text}")
+            return {"fields": [], "analysis_summary": "解析に失敗しました", "error": str(e)}
+        except Exception as e:
+            print(f"❌ AIフォーム解析エラー: {e}")
+            return {"fields": [], "analysis_summary": "解析に失敗しました", "error": str(e)}
+
+    def generate_field_mapping(self, form_structure: Dict, available_data: Dict) -> Dict:
+        """
+        フォーム構造と利用可能なデータからマッピングを生成
+        
+        Args:
+            form_structure: analyze_form_fields()の結果
+            available_data: 入力可能なデータ（name, email, phone等）
+        
+        Returns:
+            マッピング情報
+        """
+        prompt = f"""
+あなたはフォーム自動入力の専門家です。
+
+【タスク】
+以下のフォーム構造に対して、利用可能なデータをマッピングしてください。
+
+【フォーム構造】
+{json.dumps(form_structure, ensure_ascii=False, indent=2)}
+
+【利用可能なデータ】
+{json.dumps(available_data, ensure_ascii=False, indent=2)}
+
+【出力形式】
+以下のJSON形式で出力してください：
+{{
+  "mappings": [
+    {{
+      "selector": "input[name='sei']",
+      "field_category": "last_name",
+      "data_key": "last_name",
+      "value": "利用可能なデータから取得した値",
+      "confidence": 0.95
+    }}
+  ],
+  "unmapped_fields": [
+    {{
+      "selector": "select[name='category']",
+      "reason": "選択肢が不明のため自動入力不可"
+    }}
+  ]
+}}
+"""
+        
+        try:
+            response = self.model.generate_content(
+                prompt,
+                generation_config={
+                    'temperature': 0.2,
+                    'max_output_tokens': 3000,
+                }
+            )
+            
+            result_text = response.text.strip()
+            if result_text.startswith('```json'):
+                result_text = result_text[7:]
+            if result_text.startswith('```'):
+                result_text = result_text[3:]
+            if result_text.endswith('```'):
+                result_text = result_text[:-3]
+            
+            return json.loads(result_text.strip())
+            
+        except Exception as e:
+            print(f"❌ マッピング生成エラー: {e}")
+            return {"mappings": [], "unmapped_fields": [], "error": str(e)}
+
 
 # テスト用
 if __name__ == '__main__':

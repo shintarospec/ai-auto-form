@@ -1,0 +1,6 @@
+name,website_url,form_url,industry,google_place_id,description,employee_count,established_year,capital
+株式会社サンプルテスト,https://example.com,https://example.com/contact,IT・ソフトウェア,ChIJ_sample_001,サンプル企業です。テスト用にご利用ください。,50,2015,10000000
+テスト商事株式会社,https://test-company.co.jp,https://test-company.co.jp/inquiry,商社・卸売,ChIJ_sample_002,テスト用の商社です。,100,2010,50000000
+サンプル工業株式会社,https://sample-industry.jp,https://sample-industry.jp/contact-us,製造業,ChIJ_sample_003,製造業のサンプル企業,200,2005,100000000
+デモ株式会社,https://demo-corp.com,https://demo-corp.com/form,サービス業,ChIJ_sample_004,デモ用の企業データ,30,2020,5000000
+テストシステム株式会社,https://test-system.co.jp,https://test-system.co.jp/contact,システム開発,ChIJ_sample_005,システム開発会社のテスト,80,2012,30000000

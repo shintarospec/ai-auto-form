@@ -1,0 +1,65 @@
+{
+  "name": "AI AutoForm Development",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/node:1": {}
+  },
+  "postCreateCommand": "bash .devcontainer/postCreateCommand.sh",
+  "forwardPorts": [5001, 8000, 5432, 6080],
+  "portsAttributes": {
+    "5001": {
+      "label": "Flask API",
+      "onAutoForward": "notify"
+    },
+    "8000": {
+      "label": "HTML Server",
+      "onAutoForward": "openBrowser"
+    },
+    "5432": {
+      "label": "PostgreSQL",
+      "onAutoForward": "ignore"
+    },
+    "6080": {
+      "label": "VNC (noVNC)",
+      "onAutoForward": "notify"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-azuretools.vscode-docker",
+        "GitHub.copilot",
+        "GitHub.copilot-chat"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.linting.enabled": true,
+        "python.formatting.provider": "black",
+        "editor.formatOnSave": true
+      }
+    }
+  },
+  "secrets": {
+    "THESIDE_VPS_SSH_PRIVATE_KEY": {
+      "description": "VPS接続用SSH秘密鍵（-----BEGIN OPENSSH PRIVATE KEY-----から始まる）"
+    },
+    "THESIDE_VPS_HOST": {
+      "description": "VPSのIPアドレス（デフォルト: 153.126.154.158）"
+    },
+    "THESIDE_VPS_USER": {
+      "description": "VPSのユーザー名（デフォルト: ubuntu）"
+    },
+    "THESIDE_GEMINI_API_KEY": {
+      "description": "Google Gemini APIキー"
+    },
+    "THESIDE_SECRET_KEY": {
+      "description": "Flask用シークレットキー（自動生成可）"
+    },
+    "THESIDE_POSTGRES_PASSWORD": {
+      "description": "PostgreSQLパスワード"
+    }
+  }
+}
