@@ -58,11 +58,13 @@ class AutoExecutor:
     """自動実行サービス（reCAPTCHA無しフォーム専用）- Async版"""
     
     def __init__(self, headless: bool = False, display: Optional[str] = ":99",
-                 timeout: int = EXECUTION_TIMEOUT, max_retries: int = MAX_RETRIES):
+                 timeout: int = EXECUTION_TIMEOUT, max_retries: int = MAX_RETRIES,
+                 dry_run: bool = True):
         self.headless = headless
         self.display = display
         self.timeout = timeout
         self.max_retries = max_retries
+        self.dry_run = dry_run
         _ensure_screenshot_dir()
         
     async def execute_task(self, task_id: int) -> Dict:
@@ -118,6 +120,9 @@ class AutoExecutor:
             'total_fields': 0,
             'filled_fields': 0,
             'fill_rate': 0.0,
+            'dry_run': self.dry_run,
+            'submit_result': None,
+            'confirmation_result': None,
             'error_message': None,
             'executed_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'retry_count': retry_count
@@ -192,11 +197,6 @@ class AutoExecutor:
                     except:
                         pass
                     
-                    # スクリーンショット: フォーム入力前
-                    screenshot_before = await self._take_screenshot(page, task_id, 'before')
-                    if screenshot_before:
-                        result['screenshots'].append(screenshot_before)
-                    
                     # フォーム入力（解析結果を活用）
                     if form_fields:
                         # 解析結果を使った高精度入力
@@ -208,8 +208,14 @@ class AutoExecutor:
                         fill_results = await self._fill_form_fields_with_tracking(page, form_data)
                     
                     result['fill_results'] = fill_results
-                    result['filled_fields'] = len([r for r in fill_results.values() if r['success']])
-                    result['total_fields'] = len(fill_results)
+                    
+                    # ハニーポット・隠しフィールドを除外して入力率を計算
+                    honeypot_patterns = ['_wpcf7_ak_hp', 'honeypot', 'hp_textarea', 'ckySwitchfunctional']
+                    valid_results = {k: v for k, v in fill_results.items() 
+                                     if not any(hp in k for hp in honeypot_patterns)}
+                    
+                    result['filled_fields'] = len([r for r in valid_results.values() if r['success']])
+                    result['total_fields'] = len(valid_results)
                     
                     if result['total_fields'] > 0:
                         result['fill_rate'] = round(result['filled_fields'] / result['total_fields'] * 100, 1)
@@ -220,27 +226,68 @@ class AutoExecutor:
                         result['screenshots'].append(screenshot_after)
                     
                     print(f"📊 入力結果: {result['filled_fields']}/{result['total_fields']} フィールド ({result['fill_rate']}%)")
-                    
-                    # 成功判定（入力率50%以上で成功とみなす）
-                    if result['fill_rate'] >= 50:
+
+                    # 入力率判定（50%未満は失敗）
+                    if result['fill_rate'] < 50:
+                        raise Exception(f"入力率が低すぎます: {result['fill_rate']}% (閾値: 50%)")
+
+                    # --- 送信処理 ---
+                    if self.dry_run:
+                        # dry-runモード: 入力まで実行、送信はしない
+                        print(f"🔒 dry-runモード: 送信をスキップ")
                         result['success'] = True
                         result['status'] = 'completed'
                         task.status = 'completed'
                         task.completed_at = datetime.now()
-                        task.submitted = True  # 送信フラグ
-                        task.screenshot_path = screenshot_after  # スクリーンショットパス
-                        # 入力結果をform_analysisに保存（SQLAlchemy JSON更新対応）
-                        updated_analysis = dict(task.form_analysis) if task.form_analysis else {}
-                        updated_analysis['fill_results'] = fill_results
-                        updated_analysis['fill_rate'] = result['fill_rate']
-                        updated_analysis['filled_fields'] = result['filled_fields']
-                        updated_analysis['total_fields'] = result['total_fields']
-                        updated_analysis['executed_at'] = result['executed_at']
-                        task.form_analysis = updated_analysis  # 全体を再代入
-                        db.commit()
-                        print(f"✅ 自動実行完了: Task#{task_id} (入力率: {result['fill_rate']}%)")
+                        task.submitted = False  # 送信していない
+                        task.screenshot_path = screenshot_after
                     else:
-                        raise Exception(f"入力率が低すぎます: {result['fill_rate']}% (閾値: 50%)")
+                        # 送信モード: submitボタンクリック → 確認ページ突破
+                        print(f"📤 送信モード: submit実行")
+
+                        # Step 1: submitボタンクリック
+                        submit_result = await self._submit_form(page)
+                        result['submit_result'] = submit_result
+
+                        if not submit_result['success']:
+                            raise Exception(f"submitボタンのクリックに失敗: {submit_result.get('error')}")
+
+                        # Step 2: 確認ページ検出・突破
+                        confirmation_result = await self._handle_confirmation(page)
+                        result['confirmation_result'] = confirmation_result
+
+                        if not confirmation_result['success']:
+                            raise Exception(f"確認ページの突破に失敗: {confirmation_result.get('error')}")
+
+                        # Step 3: 送信完了後スクリーンショット
+                        screenshot_submitted = await self._take_screenshot(page, task_id, 'submitted')
+                        if screenshot_submitted:
+                            result['screenshots'].append(screenshot_submitted)
+
+                        result['success'] = True
+                        result['status'] = 'completed'
+                        task.status = 'completed'
+                        task.completed_at = datetime.now()
+                        task.submitted = True  # 実際に送信した
+                        task.screenshot_path = screenshot_submitted or screenshot_after
+
+                        print(f"🎉 送信完了: Task#{task_id}")
+
+                    # 入力結果をform_analysisに保存（SQLAlchemy JSON更新対応）
+                    updated_analysis = dict(task.form_analysis) if task.form_analysis else {}
+                    updated_analysis['fill_results'] = fill_results
+                    updated_analysis['fill_rate'] = result['fill_rate']
+                    updated_analysis['filled_fields'] = result['filled_fields']
+                    updated_analysis['total_fields'] = result['total_fields']
+                    updated_analysis['executed_at'] = result['executed_at']
+                    updated_analysis['dry_run'] = self.dry_run
+                    if result['submit_result']:
+                        updated_analysis['submit_result'] = result['submit_result']
+                    if result['confirmation_result']:
+                        updated_analysis['confirmation_result'] = result['confirmation_result']
+                    task.form_analysis = updated_analysis  # 全体を再代入
+                    db.commit()
+                    print(f"✅ 自動実行完了: Task#{task_id} (入力率: {result['fill_rate']}%, dry_run={self.dry_run})")
                         
                 finally:
                     if browser:
@@ -344,9 +391,9 @@ class AutoExecutor:
         
         return result
     
-    def _infer_category_from_label(self, label: str, field_name: str) -> str:
-        """ラベルやフィールド名からカテゴリを推測（AI解析の誤分類対策）"""
-        text = (label or '') + ' ' + (field_name or '')
+    def _infer_category_from_label(self, label: str, field_name: str, placeholder: str = '') -> str:
+        """ラベルやフィールド名、プレースホルダーからカテゴリを推測（AI解析の誤分類対策）"""
+        text = (label or '') + ' ' + (field_name or '') + ' ' + (placeholder or '')
         text = text.lower()
         
         # パターンマッチング（優先度順）
@@ -358,6 +405,9 @@ class AutoExecutor:
             (['ふりがな', 'フリガナ', 'kana', 'furi', 'furigana', 'カナ', 'your-furi'], 'name_kana'),
             (['姓（カナ）', 'せい（かな）', 'last_name_kana', 'sei_kana'], 'last_name_kana'),
             (['名（カナ）', 'めい（かな）', 'first_name_kana', 'mei_kana'], 'first_name_kana'),
+            # 部署・役職（会社名より先にチェック - 同じnameで部署が後に来るパターン対策）
+            (['部署', 'department', '経営企画部', '営業部', '人事部', '総務部', '開発部', '広報部', '企画部'], 'department'),
+            (['役職', 'position'], 'position'),
             # 会社系
             (['会社名', '企業名', '組織名', '法人名', 'company'], 'company'),
             # 名前系
@@ -372,9 +422,6 @@ class AutoExecutor:
             (['市区町村', 'city'], 'city'),
             (['住所', 'address'], 'address'),
             (['郵便番号', 'zip', 'postal'], 'zipcode'),
-            # 部署・役職
-            (['部署', 'department'], 'department'),
-            (['役職', 'position'], 'position'),
             # お問い合わせ
             (['お問い合わせ内容', '内容', 'message', 'inquiry', 'textarea'], 'message'),
             (['種別', 'お問い合わせ先', 'subject', 'category'], 'subject'),
@@ -508,6 +555,9 @@ class AutoExecutor:
         custom_select_count = 0  # カスタムセレクトのカウンター
         processed_custom_selects = set()  # 処理済みカスタムセレクトのセレクタ
         
+        # 同じname属性のフィールドが複数ある場合のインデックス管理
+        field_name_count = {}
+        
         for field in form_fields:
             field_name = field.get('name') or field.get('id') or ''
             field_id = field.get('id')
@@ -515,9 +565,37 @@ class AutoExecutor:
             category = field.get('field_category', 'unknown')
             label = field.get('label', field_name)
             
+            # 同じnameのフィールドのインデックスを取得
+            if field_name:
+                field_name_count[field_name] = field_name_count.get(field_name, 0) + 1
+                field_index = field_name_count[field_name] - 1  # 0-indexed
+            else:
+                field_index = 0
+            
             # ラベルからカテゴリを補正（AI解析の誤分類対策）
-            if category in ['other', 'unknown', '']:
-                category = self._infer_category_from_label(label, field_name)
+            placeholder = field.get('placeholder', '')
+            
+            # 部署名ラベルがある場合は優先的にdepartmentに補正（同名フィールドで会社名と混同されやすい）
+            if '部署' in (label or ''):
+                if category != 'department':
+                    print(f"  🔄 ラベル「部署」検出: {field_name} → department")
+                    category = 'department'
+            # 役職ラベルがある場合はpositionに補正
+            elif '役職' in (label or ''):
+                if category != 'position':
+                    print(f"  🔄 ラベル「役職」検出: {field_name} → position")
+                    category = 'position'
+            # 姓/名の単独ラベルをlast_name/first_nameに補正（AIがnameと誤分類する対策）
+            elif field_name == '姓' or (label and label.strip().rstrip('*').strip() == '姓'):
+                if category not in ['last_name']:
+                    print(f"  🔄 ラベル「姓」検出: {field_name} → last_name")
+                    category = 'last_name'
+            elif field_name == '名' or (label and label.strip().rstrip('*').strip() == '名'):
+                if category not in ['first_name']:
+                    print(f"  🔄 ラベル「名」検出: {field_name} → first_name")
+                    category = 'first_name'
+            elif category in ['other', 'unknown', '']:
+                category = self._infer_category_from_label(label, field_name, placeholder)
                 if category != 'other':
                     print(f"  🔄 ラベルからカテゴリ補正: {field_name} → {category}")
             
@@ -532,10 +610,17 @@ class AutoExecutor:
                 fill_results[result_key] = result
                 continue
             
-            # チェックボックスの場合は特別処理
+            # チェックボックスの場合は特別処理（productを渡して優先キーワード対応）
             if field_type == 'checkbox':
-                fill_results[field_name] = await self._handle_checkbox(page, field, field_name, field_id, label)
+                fill_results[field_name] = await self._handle_checkbox(page, field, field_name, field_id, label, product)
                 continue
+            
+            # セレクトボックスの場合、ラベルからカテゴリを再補正（問い合わせカテゴリ等）
+            if field_type == 'select':
+                inquiry_keywords = ['問い合わせ', '問合せ', 'お問い合わせ', 'カテゴリ', '種別', '種類']
+                if any(kw in (label or '') for kw in inquiry_keywords) and category not in ['subject', 'inquiry_type', 'prefecture', 'position']:
+                    print(f"  🔄 ラベルから問い合わせセレクト検出: {field_name} → subject")
+                    category = 'subject'
             
             # セレクトボックスの場合は特別処理（type: "search"も含む - AI誤分類対策）
             if field_type in ['select', 'search'] and category in ['subject', 'inquiry_type', 'prefecture']:
@@ -544,13 +629,17 @@ class AutoExecutor:
             
             # セレクトボックスの場合は特別処理
             if field_type == 'select':
-                fill_results[field_name] = await self._handle_select(page, field, field_name, field_id, category, product, company)
+                result_key = f"{field_name}_{field_index}" if field_index > 0 else field_name
+                fill_results[result_key] = await self._handle_select(page, field, field_name, field_id, category, product, company)
                 continue
             
             # カテゴリから入力値を取得（companyを渡してテンプレート変数を適用）
             value = self._get_value_for_category(product, category, company)
             
-            fill_results[field_name] = {
+            # 結果キー（同じnameが複数ある場合はインデックスを付加）
+            result_key = f"{field_name}_{field_index}" if field_index > 0 else field_name
+            
+            fill_results[result_key] = {
                 'success': False,
                 'selector_used': None,
                 'value': str(value)[:50] if value else None,
@@ -560,8 +649,8 @@ class AutoExecutor:
             }
             
             if not value:
-                fill_results[field_name]['error'] = f"カテゴリ '{category}' に対応するデータがありません"
-                print(f"  ⚠️ {field_name} ({category}): データなし")
+                fill_results[result_key]['error'] = f"カテゴリ '{category}' に対応するデータがありません"
+                print(f"  ⚠️ {result_key} ({category}): データなし")
                 continue
             
             # 解析結果のセレクタを優先使用
@@ -579,25 +668,29 @@ class AutoExecutor:
                 selectors.append(f'{tag}[name*="{field_name}"]')
                 selectors.append(f'{tag}[id*="{field_name}"]')
             
+            filled = False
             for selector in selectors:
                 try:
-                    element = await page.query_selector(selector)
-                    if element:
+                    # 同じname属性の要素が複数ある場合、インデックスで選択
+                    elements = await page.query_selector_all(selector)
+                    if elements and field_index < len(elements):
+                        element = elements[field_index]
                         is_visible = await element.is_visible()
                         is_enabled = await element.is_enabled()
                         
                         if is_visible and is_enabled:
                             await element.fill(str(value))
-                            fill_results[field_name]['success'] = True
-                            fill_results[field_name]['selector_used'] = selector
-                            print(f"  ✅ {field_name} ({category}): 入力完了 [{selector}]")
+                            fill_results[result_key]['success'] = True
+                            fill_results[result_key]['selector_used'] = f"{selector}[{field_index}]"
+                            print(f"  ✅ {result_key} ({category}): 入力完了 [{selector}[{field_index}]]")
+                            filled = True
                             break
                 except Exception as e:
-                    fill_results[field_name]['error'] = str(e)
+                    fill_results[result_key]['error'] = str(e)
                     continue
             
-            if not fill_results[field_name]['success']:
-                print(f"  ❌ {field_name} ({category}): セレクタが見つかりません")
+            if not filled:
+                print(f"  ❌ {result_key} ({category}): セレクタが見つかりません")
         
         return fill_results
     
@@ -733,6 +826,23 @@ class AutoExecutor:
                             target_value = opt['value']
                             print(f"  🎯 選択: {opt['text']}")
                             break
+                
+                # 役職セレクト、または未知のセレクト（other）で値がマッチしなかった場合
+                # 「その他」または最初の有効選択肢を選ぶ（必須フィールド対策）
+                if not target_value and category in ['position', 'other', 'unknown', '']:
+                    # 「その他」を探す
+                    for opt in options:
+                        if 'その他' in opt['text']:
+                            target_value = opt['value']
+                            print(f"  🎯 フォールバック「その他」を選択: {opt['text']}")
+                            break
+                    # 「その他」もなければ最初の有効な選択肢
+                    if not target_value:
+                        for opt in options:
+                            if opt['value'] and '選択' not in opt['text'] and 'お選び' not in opt['text']:
+                                target_value = opt['value']
+                                print(f"  🎯 フォールバック選択: {opt['text']}")
+                                break
             
             if target_value:
                 await select_element.select_option(value=target_value)
@@ -912,8 +1022,11 @@ class AutoExecutor:
         
         return result
 
-    async def _handle_checkbox(self, page, field: Dict, field_name: str, field_id: str, label: str) -> Dict:
-        """チェックボックスを処理（同意チェックボックス等）
+    async def _handle_checkbox(self, page, field: Dict, field_name: str, field_id: str, label: str, product: Product = None) -> Dict:
+        """チェックボックスを処理（同意チェックボックス・選択式チェックボックス対応）
+        
+        - 同意チェックボックス（1つのみ）: 通常通りチェック
+        - 選択式チェックボックス（同名で複数）: inquiry_type_priorityのキーワードでフィルタ
         
         多くのサイトではカスタムスタイルのため、input[type="checkbox"]は非表示で
         関連するlabel要素をクリックすることでチェックが入る仕組みになっている。
@@ -933,6 +1046,12 @@ class AutoExecutor:
             'label': label,
             'error': None
         }
+        
+        # 優先キーワードを取得
+        priority_keywords = []
+        if product and hasattr(product, 'inquiry_type_priority') and product.inquiry_type_priority:
+            priority_keywords = [kw.strip() for kw in product.inquiry_type_priority.split(',') if kw.strip()]
+            debug_log(f"   優先キーワード: {priority_keywords}")
         
         # IDセレクタ用のエスケープ（#id形式のみ必要）
         def escape_id_selector(s):
@@ -956,57 +1075,133 @@ class AutoExecutor:
         
         debug_log(f"   チェックボックスセレクタ候補: {checkbox_selectors}")
         
-        # 全ての同名チェックボックスをチェック（複数ある場合に対応）
         for selector in checkbox_selectors:
             try:
                 debug_log(f"    🔍 チェックボックス検索中: {selector}")
-                # 全てのマッチする要素を取得
                 elements = await page.query_selector_all(selector)
                 debug_log(f"    📍 マッチした要素数: {len(elements)}")
                 
-                for i, element in enumerate(elements):
-                    is_visible = await element.is_visible()
-                    is_checked = await element.is_checked()
-                    debug_log(f"    📍 要素[{i}]: visible={is_visible}, checked={is_checked}")
+                if not elements:
+                    continue
+                
+                # --- 選択式チェックボックス判定（同名で複数ある場合）---
+                if len(elements) > 1:
+                    debug_log(f"    📋 選択式チェックボックス検出（{len(elements)}個）")
                     
-                    if is_checked:
-                        # 既にチェック済みならスキップ
-                        debug_log(f"    ℹ️ 要素[{i}]: 既にチェック済み")
-                        continue
+                    # 各チェックボックスのvalue/labelを取得してフィルタ
+                    checkbox_items = []
+                    for i, element in enumerate(elements):
+                        value = await element.get_attribute('value') or ''
+                        # ラベルを取得
+                        cb_label = await element.evaluate("""(el) => {
+                            const label = el.closest('label');
+                            if (label) return label.textContent.trim();
+                            const next = el.nextSibling;
+                            if (next && next.textContent) return next.textContent.trim();
+                            return '';
+                        }""")
+                        checkbox_items.append({
+                            'index': i,
+                            'element': element,
+                            'value': value,
+                            'label': cb_label
+                        })
+                        debug_log(f"      [{i}] value={value}, label={cb_label[:30] if cb_label else 'なし'}")
                     
-                    # 表示されている場合は通常のcheck()
-                    if is_visible:
+                    # 優先キーワードでフィルタ
+                    items_to_check = []
+                    for keyword in priority_keywords:
+                        for item in checkbox_items:
+                            if keyword in item['value'] or keyword in item['label']:
+                                if item not in items_to_check:
+                                    items_to_check.append(item)
+                                    debug_log(f"    🎯 キーワードマッチ: {item['label'] or item['value']} (keyword: {keyword})")
+                    
+                    # マッチしない場合は「その他」を探す
+                    if not items_to_check:
+                        for item in checkbox_items:
+                            if 'その他' in item['value'] or 'その他' in item['label'] or 'other' in item['value'].lower():
+                                items_to_check.append(item)
+                                debug_log(f"    🎯 デフォルト選択: {item['label'] or item['value']}")
+                                break
+                    
+                    # それでもない場合は最初の項目
+                    if not items_to_check and checkbox_items:
+                        items_to_check.append(checkbox_items[0])
+                        debug_log(f"    🎯 最初の項目を選択: {checkbox_items[0]['label'] or checkbox_items[0]['value']}")
+                    
+                    # 選択した項目だけをチェック
+                    checked_values = []
+                    for item in items_to_check:
+                        element = item['element']
+                        is_checked = await element.is_checked()
+                        if is_checked:
+                            debug_log(f"    ℹ️ [{item['index']}]: 既にチェック済み")
+                            checked_values.append(item['value'] or item['label'])
+                            continue
+                        
                         try:
-                            await element.check(timeout=5000)  # タイムアウトを5秒に短縮
-                            debug_log(f"    ✅ 要素[{i}]: チェック完了")
+                            await element.check(timeout=5000)
+                            checked_values.append(item['value'] or item['label'])
+                            debug_log(f"    ✅ [{item['index']}]: {item['label'] or item['value']} チェック完了")
                         except Exception as e:
-                            debug_log(f"    ⚠️ 要素[{i}] check()失敗: {e}")
-                            # force=Trueでクリックを試す
+                            debug_log(f"    ⚠️ [{item['index']}] check()失敗: {e}")
                             try:
                                 await element.click(force=True, timeout=3000)
-                                debug_log(f"    ✅ 要素[{i}]: force click完了")
+                                checked_values.append(item['value'] or item['label'])
+                                debug_log(f"    ✅ [{item['index']}]: force click完了")
                             except Exception as e2:
-                                debug_log(f"    ⚠️ 要素[{i}] force click失敗: {e2}")
-                    else:
-                        # 非表示の場合はdispatch_eventを試す
-                        try:
-                            await element.dispatch_event('click')
-                            debug_log(f"    ✅ 要素[{i}]: dispatch_eventでチェック完了")
-                        except Exception as e:
-                            debug_log(f"    ⚠️ 要素[{i}] dispatch_event失敗: {e}")
+                                debug_log(f"    ⚠️ [{item['index']}] force click失敗: {e2}")
+                    
+                    if checked_values:
+                        result['success'] = True
+                        result['selector_used'] = selector
+                        result['value'] = ', '.join(checked_values)
+                        debug_log(f"  ✅ {field_name} (選択式checkbox): {result['value']} チェック完了")
+                        return result
                 
-                # 全てチェック後、最終状態を確認
-                if elements:
-                    # 少なくとも1つがチェックされていれば成功
-                    for element in elements:
-                        if await element.is_checked():
+                else:
+                    # --- 単一チェックボックス（同意チェックボックス等）---
+                    element = elements[0]
+                    is_visible = await element.is_visible()
+                    is_checked = await element.is_checked()
+                    debug_log(f"    📍 単一チェックボックス: visible={is_visible}, checked={is_checked}")
+                    
+                    if is_checked:
+                        result['success'] = True
+                        result['selector_used'] = selector
+                        debug_log(f"  ✅ {field_name} (checkbox): 既にチェック済み [{selector}]")
+                        return result
+                    
+                    if is_visible:
+                        try:
+                            await element.check(timeout=5000)
                             result['success'] = True
                             result['selector_used'] = selector
                             debug_log(f"  ✅ {field_name} (checkbox): チェック完了 [{selector}]")
                             return result
-                    
-                    # まだチェックされていない場合、最初の可視要素に再試行
-                    debug_log(f"    ⚠️ チェックされていない、ラベルクリックを試行...")
+                        except Exception as e:
+                            debug_log(f"    ⚠️ check()失敗: {e}")
+                            try:
+                                await element.click(force=True, timeout=3000)
+                                if await element.is_checked():
+                                    result['success'] = True
+                                    result['selector_used'] = selector
+                                    debug_log(f"  ✅ {field_name} (checkbox): force click完了 [{selector}]")
+                                    return result
+                            except Exception as e2:
+                                debug_log(f"    ⚠️ force click失敗: {e2}")
+                    else:
+                        try:
+                            await element.dispatch_event('click')
+                            if await element.is_checked():
+                                result['success'] = True
+                                result['selector_used'] = selector
+                                debug_log(f"  ✅ {field_name} (checkbox): dispatch_event完了 [{selector}]")
+                                return result
+                        except Exception as e:
+                            debug_log(f"    ⚠️ dispatch_event失敗: {e}")
+                            
             except Exception as e:
                 debug_log(f"    ❌ セレクタエラー: {selector} - {e}")
                 continue
@@ -1076,6 +1271,212 @@ class AutoExecutor:
         debug_log(f"  ❌ {field_name} (checkbox): 全ての方法で失敗")
         return result
     
+    async def _submit_form(self, page) -> Dict:
+        """submitボタンを検出してクリック
+
+        検出優先順位:
+        1. button[type="submit"] / input[type="submit"]
+        2. 「送信」「確認」テキストを含むボタン
+        3. form.submit() による強制送信
+
+        JS alert/confirm ダイアログは自動的にacceptする。
+        """
+        result = {'success': False, 'method': None, 'error': None}
+
+        # JS alert/confirm を自動accept
+        page.on('dialog', lambda dialog: asyncio.ensure_future(dialog.accept()))
+
+        # submitボタン検出（優先度順）
+        submit_selectors = [
+            'button[type="submit"]',
+            'input[type="submit"]',
+            'button:has-text("送信")',
+            'button:has-text("確認")',
+            'button:has-text("入力内容を確認")',
+            'button:has-text("確認する")',
+            'button:has-text("確認画面へ")',
+            'input[value="送信"]',
+            'input[value="確認"]',
+            'input[value="送信する"]',
+            'input[value="確認する"]',
+            'input[value="確認画面へ"]',
+            'a:has-text("送信")',
+            'a:has-text("確認")',
+        ]
+
+        for selector in submit_selectors:
+            try:
+                element = await page.query_selector(selector)
+                if element:
+                    is_visible = await element.is_visible()
+                    if is_visible:
+                        print(f"  🔘 submitボタン検出: {selector}")
+                        await element.click()
+                        result['success'] = True
+                        result['method'] = selector
+                        break
+            except Exception as e:
+                continue
+
+        # セレクタで見つからない場合、form.submit()を試行
+        if not result['success']:
+            try:
+                submitted = await page.evaluate('''() => {
+                    const form = document.querySelector('form');
+                    if (form) {
+                        form.submit();
+                        return true;
+                    }
+                    return false;
+                }''')
+                if submitted:
+                    print(f"  🔘 form.submit() で送信")
+                    result['success'] = True
+                    result['method'] = 'form.submit()'
+            except Exception as e:
+                result['error'] = f"form.submit()失敗: {e}"
+
+        if not result['success']:
+            result['error'] = result.get('error') or 'submitボタンが見つかりません'
+            print(f"  ❌ submitボタン検出失敗")
+            return result
+
+        # ページ遷移 or Ajax完了を待機
+        try:
+            await page.wait_for_load_state('networkidle', timeout=15000)
+        except PlaywrightTimeout:
+            print(f"  ⚠️ networkidle待機タイムアウト（続行）")
+
+        await asyncio.sleep(2)  # 追加安定化待機
+        print(f"  ✅ submit完了: {result['method']}")
+        return result
+
+    async def _handle_confirmation(self, page) -> Dict:
+        """確認ページを検出して最終送信ボタンをクリック
+
+        対応パターン:
+        - 入力→確認→送信の3ステップ（日本のフォームに多い）
+        - 1ページ完結型（確認ページなし → そのまま成功）
+        - SPA非同期送信（ページ遷移なし → 完了メッセージ検出）
+        """
+        result = {
+            'success': False,
+            'confirmation_detected': False,
+            'completion_detected': False,
+            'method': None,
+            'error': None
+        }
+
+        page_text = ''
+        try:
+            page_text = await page.inner_text('body')
+        except Exception:
+            page_text = ''
+
+        # 送信完了の検出（確認ページではなく、もう完了している場合）
+        completion_keywords = [
+            'ありがとうございます', '送信が完了', '送信しました',
+            '受け付けました', '受付完了', 'お問い合わせを受け付け',
+            '送信完了', 'Thank you', 'successfully submitted',
+            'お問い合わせいただき', '自動返信メール',
+        ]
+
+        if any(kw in page_text for kw in completion_keywords):
+            print(f"  🎉 送信完了ページを検出")
+            result['success'] = True
+            result['completion_detected'] = True
+            return result
+
+        # 確認ページの検出
+        confirmation_keywords = [
+            '入力内容の確認', '入力内容をご確認', '確認画面',
+            '以下の内容で', 'ご確認ください', '内容をご確認',
+            '送信してよろしいですか', '下記の内容で',
+        ]
+
+        is_confirmation = any(kw in page_text for kw in confirmation_keywords)
+
+        if not is_confirmation:
+            # 確認ページでもなく完了ページでもない → 1ページ完結型の可能性
+            # submit後のページを完了とみなす
+            print(f"  ℹ️ 確認ページ未検出 → 1ページ完結型として処理")
+            result['success'] = True
+            result['confirmation_detected'] = False
+            return result
+
+        print(f"  📋 確認ページを検出 → 最終送信ボタンを探索")
+        result['confirmation_detected'] = True
+
+        # 最終送信ボタン検出（「送信」を含むが「確認」は除外）
+        final_submit_selectors = [
+            'button:has-text("送信する")',
+            'button:has-text("この内容で送信")',
+            'button:has-text("送信")',
+            'input[type="submit"][value*="送信"]',
+            'input[value="送信する"]',
+            'input[value="送信"]',
+            'button:has-text("Submit")',
+            'a:has-text("送信する")',
+            'a:has-text("送信")',
+        ]
+
+        for selector in final_submit_selectors:
+            try:
+                element = await page.query_selector(selector)
+                if element:
+                    is_visible = await element.is_visible()
+                    if is_visible:
+                        print(f"  🔘 最終送信ボタン検出: {selector}")
+                        await element.click()
+                        result['success'] = True
+                        result['method'] = selector
+                        break
+            except Exception:
+                continue
+
+        if not result['success']:
+            # form.submit()フォールバック
+            try:
+                submitted = await page.evaluate('''() => {
+                    const form = document.querySelector('form');
+                    if (form) {
+                        form.submit();
+                        return true;
+                    }
+                    return false;
+                }''')
+                if submitted:
+                    print(f"  🔘 確認ページ: form.submit() で送信")
+                    result['success'] = True
+                    result['method'] = 'confirmation_form.submit()'
+            except Exception as e:
+                pass
+
+        if not result['success']:
+            result['error'] = '確認ページの送信ボタンが見つかりません'
+            print(f"  ❌ 確認ページの最終送信ボタン検出失敗")
+            return result
+
+        # ページ遷移待機
+        try:
+            await page.wait_for_load_state('networkidle', timeout=15000)
+        except PlaywrightTimeout:
+            print(f"  ⚠️ networkidle待機タイムアウト（続行）")
+
+        await asyncio.sleep(2)
+
+        # 最終確認: 完了ページに到達したか
+        try:
+            final_text = await page.inner_text('body')
+            if any(kw in final_text for kw in completion_keywords):
+                print(f"  🎉 送信完了ページに到達")
+                result['completion_detected'] = True
+        except Exception:
+            pass
+
+        print(f"  ✅ 確認ページ突破完了: {result['method']}")
+        return result
+
     async def _take_screenshot(self, page, task_id: int, stage: str) -> Optional[str]:
         """スクリーンショットを撮影して保存"""
         try:
@@ -1229,13 +1630,15 @@ class AutoExecutor:
 
 
 # 同期版ラッパー（Flask用）
-def execute_task_sync(task_id: int, headless: bool = False, display: str = ":99") -> Dict:
+def execute_task_sync(task_id: int, headless: bool = False, display: str = ":99",
+                      dry_run: bool = True) -> Dict:
     """同期的にタスクを自動実行（Flask用ラッパー）"""
-    executor = AutoExecutor(headless=headless, display=display)
+    executor = AutoExecutor(headless=headless, display=display, dry_run=dry_run)
     return asyncio.run(executor.execute_task(task_id))
 
 
-def execute_batch_sync(company_id: int, limit: int = 10, headless: bool = False, display: str = ":99") -> Dict:
+def execute_batch_sync(company_id: int, limit: int = 10, headless: bool = False,
+                       display: str = ":99", dry_run: bool = True) -> Dict:
     """同期的にバッチ実行（Flask用ラッパー）"""
-    executor = AutoExecutor(headless=headless, display=display)
+    executor = AutoExecutor(headless=headless, display=display, dry_run=dry_run)
     return asyncio.run(executor.execute_batch(company_id, limit))

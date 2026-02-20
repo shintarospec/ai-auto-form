@@ -1724,20 +1724,24 @@ def analyze_company_tasks_batch(company_id):
 def auto_execute_task(task_id):
     """
     タスクを自動実行（automation_type='auto'のみ）
-    
+
     Request Body（オプション）:
     {
-        "headless": false,  # VNC表示する場合はfalse
-        "display": ":1"     # VNC DISPLAY番号
+        "headless": false,   # VNC表示する場合はfalse
+        "display": ":1",     # VNC DISPLAY番号
+        "dry_run": true      # true=入力のみ（デフォルト）, false=送信まで実行
     }
-    
+
     Response:
     {
         "success": true,
         "task_id": 11,
-        "status": "completed",  # or "failed"
+        "status": "completed",
+        "dry_run": true,
+        "submit_result": null,
+        "confirmation_result": null,
         "execution_time": 15.3,
-        "screenshots": ["debug_screenshots/panel_debug_*.png", ...],
+        "screenshots": [...],
         "error_message": null,
         "executed_at": "2026-01-13 07:30:00"
     }
@@ -1746,14 +1750,17 @@ def auto_execute_task(task_id):
         data = request.get_json() or {}
         headless = data.get('headless', False)  # デフォルトVNC表示
         display = data.get('display', ':99')    # デフォルトVNC DISPLAY
-        
-        print(f"🤖 自動実行リクエスト: Task#{task_id} (headless={headless}, display={display})")
-        
+        dry_run = data.get('dry_run', True)     # デフォルトdry-run（送信しない）
+
+        mode_label = "dry-run" if dry_run else "送信モード"
+        print(f"🤖 自動実行リクエスト: Task#{task_id} (headless={headless}, display={display}, {mode_label})")
+
         # AutoExecutor実行
         result = execute_task_sync(
             task_id=task_id,
             headless=headless,
-            display=display
+            display=display,
+            dry_run=dry_run
         )
         
         if result['success']:
@@ -1775,14 +1782,15 @@ def auto_execute_task(task_id):
 def auto_execute_batch(company_id):
     """
     企業の自動実行可能タスクを一括実行
-    
+
     Request Body（オプション）:
     {
         "limit": 10,        # 最大実行件数
         "headless": false,  # VNC表示する場合はfalse
-        "display": ":1"     # VNC DISPLAY番号
+        "display": ":1",    # VNC DISPLAY番号
+        "dry_run": true     # true=入力のみ（デフォルト）, false=送信まで実行
     }
-    
+
     Response:
     {
         "success": true,
@@ -1790,16 +1798,7 @@ def auto_execute_batch(company_id):
         "total_tasks": 5,
         "completed": 4,
         "failed": 1,
-        "results": [
-            {
-                "success": true,
-                "task_id": 11,
-                "status": "completed",
-                "execution_time": 12.5,
-                ...
-            },
-            ...
-        ],
+        "results": [...],
         "execution_time": 65.2
     }
     """
@@ -1808,15 +1807,18 @@ def auto_execute_batch(company_id):
         limit = data.get('limit', 10)
         headless = data.get('headless', False)
         display = data.get('display', ':99')  # VNC DISPLAY :99
-        
-        print(f"🤖 バッチ実行リクエスト: Company#{company_id} (limit={limit}, headless={headless})")
-        
+        dry_run = data.get('dry_run', True)   # デフォルトdry-run
+
+        mode_label = "dry-run" if dry_run else "送信モード"
+        print(f"🤖 バッチ実行リクエスト: Company#{company_id} (limit={limit}, headless={headless}, {mode_label})")
+
         # バッチ実行
         result = execute_batch_sync(
             company_id=company_id,
             limit=limit,
             headless=headless,
-            display=display
+            display=display,
+            dry_run=dry_run
         )
         
         return jsonify(result), 200
