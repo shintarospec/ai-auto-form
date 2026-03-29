@@ -1628,13 +1628,35 @@ class AutoExecutor:
                             else:
                                 last_fail_reason = f"label_element_not_interactable"
                         else:
-                            last_fail_reason = f"label_not_found: {clean_label[:30]}"
+                            # IMP-045: label未発見 → 同じテキストでplaceholder検索を試行
+                            try:
+                                ph_loc = page.get_by_placeholder(clean_label, exact=False)
+                                ph_count = await ph_loc.count()
+                                if ph_count > 0:
+                                    ph_target = ph_loc.nth(min(field_index, ph_count - 1))
+                                    if await ph_target.is_visible() and await ph_target.is_enabled():
+                                        await ph_target.fill(str(value))
+                                        fill_results[result_key]['success'] = True
+                                        fill_results[result_key]['selector_used'] = f'get_by_placeholder("{clean_label}") via label'
+                                        print(f"  ✅ IMP-045: {result_key} ({category}): label→placeholder fallback成功 [{clean_label}]")
+                                        filled = True
+                                    else:
+                                        last_fail_reason = f"label_not_found: {clean_label[:30]}"
+                                else:
+                                    last_fail_reason = f"label_not_found: {clean_label[:30]}"
+                            except Exception:
+                                last_fail_reason = f"label_not_found: {clean_label[:30]}"
                 except Exception as e:
                     last_fail_reason = f"label_error: {str(e)[:80]}"
 
-            # 7. placeholder textでフォールバック
+            # 7. placeholder textでフォールバック（IMP-045: labelテキストでもplaceholder検索）
             if not filled:
                 placeholder = field.get('placeholder', '')
+                if not placeholder or len(placeholder) < 2:
+                    # placeholderが空の場合、labelテキストをplaceholder検索にも使用
+                    _label_text = field.get('label', '').strip().replace('*', '').replace('必須', '').strip()
+                    if _label_text and len(_label_text) >= 2 and len(_label_text) <= 30:
+                        placeholder = _label_text
                 if placeholder and len(placeholder) >= 2:
                     try:
                         locator = page.get_by_placeholder(placeholder, exact=False)
