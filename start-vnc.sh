@@ -12,12 +12,17 @@ sleep 2
 
 # 1. Xvfb起動（仮想ディスプレイ :99, 解像度 1920x1080）
 echo "📺 Starting Xvfb (virtual display :99, 1920x1080)..."
-Xvfb :99 -screen 0 1920x1080x24 &
+Xvfb :99 -screen 0 1920x1080x24 -ac +extension RANDR +extension GLX +render -noreset &
 XVFB_PID=$!
 sleep 2
 
 # DISPLAY環境変数を設定
 export DISPLAY=:99
+
+# キーボード設定を適用
+echo "⌨️  Configuring keyboard layout..."
+export DISPLAY=:99
+setxkbmap -display :99 us 2>/dev/null || echo "⚠️  setxkbmap not available (will use defaults)"
 
 # 2. VNCサーバー起動（ポート5900）
 echo "🖥️  Starting VNC server (port 5900)..."

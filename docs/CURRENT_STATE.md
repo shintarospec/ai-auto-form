@@ -1,13 +1,6 @@
 # AI AutoForm 現状整理書
-**最終更新:** 2026-01-31
-**プロジェクトフェーズ:** Phase 2-B 完全稼働✅、フォーム解析・自動入力改善完了✅
-
-> 📘 **フォーム解析・自動入力の詳細仕様**: [docs/FORM_AUTOMATION_SPEC.md](FORM_AUTOMATION_SPEC.md)
-> - field_category一覧、ルール拡張方法、トラブルシューティング
-
-### 🎉 2026-01-31 完了した改善
-- **フォーム解析・自動入力の根本改善**: ラベル取得6段階強化、AI分類精度向上、フォールバック機構
-- **種別優先キーワード機能**: `inquiry_type_priority`カラム追加、セレクトボックス自動選択
+**最終更新:** 2026-01-29
+**プロジェクトフェーズ:** Phase 2-B 完全稼働✅、1万件テスト準備中
 
 ---
 
@@ -192,7 +185,7 @@ docker exec -it ai-autoform-db psql -U postgres -d ai_autoform -c "SELECT COUNT(
 | textarea | ✅ | 問い合わせ内容等 |
 | email input | ✅ | type="email" |
 | tel input | ✅ | type="tel" |
-| select | ✅ | ドロップダウン（種別優先キーワード対応、2026-01-31） |
+| select | ⚠️未対応 | ドロップダウン |
 | radio button | ⚠️未対応 | 選択肢 |
 | checkbox | ⚠️未対応 | チェックボックス |
 | date picker | ⚠️未対応 | 日付選択 |
@@ -342,13 +335,12 @@ category_mapping = {
 | ID | 機能 | 関連ファイル | 最終テスト日 | 備考 |
 |----|------|-------------|-------------|------|
 | MCF-01 | タスク生成 | `backend/api/simple_api.py` | 2025-12-31 | 案件ごとの送信者情報反映 |
-| MCF-02 | フォーム自動入力 | `backend/services/automation_service.py` | **2026-01-31** | **AI解析結果活用、フォールバック機構、セレクトボックス自動選択** |
-| MCF-03 | フォーム事前分析 | `backend/services/form_analyzer.py` | **2026-01-31** | **ラベル取得6段階強化（label[for], 親要素, 兄弟要素, aria-label, title）** |
-| MCF-04 | 完全自動実行 | `backend/services/auto_executor.py` | **2026-01-31** | **種別優先キーワード機能追加、`_handle_select`改善** |
+| MCF-02 | フォーム自動入力 | `backend/services/automation_service.py` | 2025-12-31 | Playwright統合、全フィールド入力確認済み |
+| MCF-03 | フォーム事前分析 | `backend/services/form_analyzer.py` | 2026-01-29 | reCAPTCHA検出、field_category解析、VPSデプロイ済✅ |
+| MCF-04 | 完全自動実行 | `backend/services/auto_executor.py` | **2026-01-29** | **解析結果活用、スクリーンショット保存、入力結果追跡、fill_rate計測** |
 | MCF-05 | DB接続・モデル定義 | `backend/simple_models.py`, `backend/database.py` | 2026-01-13 | 3テーブル＋Phase 2-B拡張カラム |
 | MCF-06 | ワーカーコンソールUI | `simple-console-v2.html` | 2025-12-31 | VNC統合、タスク実行・完了 |
-| MCF-07 | 管理コンソールUI | `admin-phase2a.html` | **2026-01-31** | **種別優先キーワード入力欄追加** |
-| MCF-08 | AI分類サービス | `backend/services/gemini_service.py` | **2026-01-31** | **プロンプト改善（ラベル最優先、otherは最後の手段）** |
+| MCF-07 | 管理コンソールUI | `admin-phase2a.html` | 2025-12-31 | 案件・企業・タスク管理 |
 
 ### MCF変更時のルール
 1. **変更前にテスト実行**（手動でUI確認 or APIテスト）
@@ -386,11 +378,6 @@ category_mapping = {
 
 ### 📋 バックログ（優先度順）
 
-#### 高優先度（実装予定）
-| ID | タスク | 優先度 | 説明 |
-|----|--------|--------|------|
-| TODO-15 | 実際に送信する機能追加 | 🔴高 | 現在はフォーム入力のみで送信ボタンは押さない仕様。本番運用時に「送信する/しない」選択可能に |
-
 #### 中優先度（1万件テスト完了後）
 | ID | タスク | 優先度 | 説明 |
 |----|--------|--------|------|
@@ -407,8 +394,6 @@ category_mapping = {
 ### ✅ 完了（直近）
 | ID | タスク | 完了日 | 備考 |
 |----|--------|--------|------|
-| **TODO-16** | **フォーム解析・自動入力改善** | **2026-01-31** | **ラベル取得6段階強化、Geminiプロンプト改善、AI解析結果活用、フォールバック機構** |
-| **TODO-17** | **種別優先キーワード機能** | **2026-01-31** | **DB: inquiry_type_priority追加、UI: admin-phase2a.html入力欄、API: POST/PUT対応** |
 | **TODO-12** | **Phase 2-Bテスト・運用確認** | **2026-01-29** | **FormAnalyzer/AutoExecutor全API動作確認、asyncio対応修正（Flask互換性）、VNC display :99設定** |
 | **TODO-13** | **管理コンソールにPhase 2-B機能追加** | **2026-01-27** | **admin-phase2a.htmlに自動化タブ追加、分析/自動実行ボタン、統計表示** |
 | **DONE-09** | **Phase 2-B VPSデプロイ** | **2026-01-13** | **form_analyzer.py, auto_executor.py, simple_api.py, simple_models.pyをVPSにデプロイ、DBマイグレーション完了、Flask再起動確認済み** |
@@ -496,9 +481,6 @@ category_mapping = {
 
 | 日付 | 変更内容 |
 |------|----------|
-| **2026-01-31** | **フォーム解析・自動入力改善**: form_analyzer.py（ラベル取得6段階）、gemini_service.py（プロンプト改善）、automation_service.py（AI解析結果活用+フォールバック）、simple_api.py（form_fields渡し） |
-| **2026-01-31** | **種別優先キーワード機能**: DB（inquiry_type_priority追加）、admin-phase2a.html（UI追加）、simple_api.py（API対応）、auto_executor.py（_handle_select改善） |
-| **2026-01-31** | **タスク201テスト成功**: 全5フィールド（full_name, email, phone, company, message）が正常入力確認 |
 | **2026-01-29** | **AutoExecutor大幅改善**: 解析結果活用設計、field_category→Productマッピング、スクリーンショット保存、fill_results追跡、fill_rate計測、失敗改善サイクル設計追加 |
 | **2026-01-29** | **CURRENT_STATE.md構造強化**: 処理パイプライン（セクション1）追加、フォーム対応・失敗改善設計（セクション2）追加 |
 | 2026-01-13 | 初版作成（AI_DEVELOPMENT_OPERATIONS_GUIDEに基づく）、TODO-11追加（GitHub Secrets設定） |

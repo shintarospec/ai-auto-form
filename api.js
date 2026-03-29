@@ -11,8 +11,8 @@ if (typeof window !== 'undefined') {
         // Codespacesの場合: ポート番号を8000から5001に変更
         API_BASE_URL = window.location.protocol + '//' + currentHost.replace('-8000.', '-5001.') + '/api';
     } else {
-        // VPS直接アクセスまたはローカル開発の場合
-        API_BASE_URL = window.location.protocol + '//' + window.location.hostname + ':5001/api';
+        // ローカル開発の場合
+        API_BASE_URL = 'http://localhost:5001/api';
     }
     console.log('🔗 API Base URL:', API_BASE_URL);
 }

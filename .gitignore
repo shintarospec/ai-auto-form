@@ -54,3 +54,50 @@ htmlcov/
 # Playwright
 playwright-report/
 test-results/
+
+# Screenshots & debug
+screenshots/
+debug_screenshots/
+vnc-test-screenshot.png
+
+# Backup files
+*.bak_*
+
+# One-off scripts (analysis, migration, test, patches)
+analysis_*.py
+analyze_*.py
+add_company_fields_only.py
+batch_form_analyze.py
+batch_form_reanalyze.py
+batch_send_0228.py
+batch_send_50.py
+block_dup.py
+check_*.py
+extract_failed.py
+failed_analysis.py
+gemini_vision_v7.py
+generate_tasks_bulk.py
+get_test_ids.py
+gv_after_grade.py
+gv_p9_*.py
+gv_p10_*.py
+imp0*_*.py
+import_wantedly_csv.py
+migrate_one_by_one.py
+migrate_simple.py
+p9_*.py
+p10_batch3_create.py
+reset_*.py
+schema_check.py
+seed_dummy_companies.py
+simple_api.py
+test_*.py
+test_batch_50_results.json
+
+# Runtime
+form_type
+retry_count
+gv_grade/
+inport/
+reports/
+static/temp_review/

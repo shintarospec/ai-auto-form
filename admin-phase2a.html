@@ -51,8 +51,8 @@
     <header class="bg-slate-950 border-b border-slate-800 sticky top-0 z-10">
         <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <i class="fas fa-rocket text-indigo-500 text-2xl"></i>
-                <h1 class="text-2xl font-bold text-white">Phase 2-A タスク生成管理</h1>
+                <span class="text-2xl">⚡️</span>
+                <h1 class="text-2xl font-bold text-white">TheSide</h1>
             </div>
             <div id="api-status" class="px-4 py-2 rounded-lg bg-slate-800 border border-slate-700">
                 <div class="flex items-center gap-2 whitespace-nowrap">
@@ -1617,24 +1617,28 @@
 
         async function loadData() {
             try {
-                // Fetch all data
-                const [products, companies, tasks] = await Promise.all([
-                    fetch(`${API_BASE}/products`).then(r => r.json()),
-                    fetch(`${API_BASE}/companies`).then(r => r.json()),
-                    fetch(`${API_BASE}/tasks`).then(r => r.json())
-                ]);
-                
+                // Fetch products first (lightweight)
+                const products = await fetch(`${API_BASE}/products`).then(r => r.json());
                 productsData = products;
-                companiesData = companies;
-                tasksData = tasks;
-                
-                updateStats();
                 renderProducts();
-                renderCompanies();
-                renderTasks();
                 populateProductSelect();
-                populateCompanyCheckboxes();
                 updateAPIStatus(true);
+
+                // Fetch stats via lightweight count endpoint or limit
+                try {
+                    const companies = await fetch(`${API_BASE}/companies?limit=100`).then(r => r.json());
+                    companiesData = Array.isArray(companies) ? companies : (companies.companies || []);
+                    renderCompanies();
+                    populateCompanyCheckboxes();
+                } catch(e) { console.warn('Companies load limited:', e); }
+
+                try {
+                    const tasks = await fetch(`${API_BASE}/tasks?limit=100`).then(r => r.json());
+                    tasksData = Array.isArray(tasks) ? tasks : (tasks.tasks || []);
+                    renderTasks();
+                } catch(e) { console.warn('Tasks load limited:', e); }
+
+                updateStats();
             } catch (error) {
                 console.error('Failed to load data:', error);
                 updateAPIStatus(false);

@@ -275,10 +275,14 @@ def get_tasks():
     """タスク一覧を取得"""
     db = get_db_session()
     try:
-        tasks = db.query(Task).options(
+        limit = request.args.get('limit', type=int)
+        query = db.query(Task).options(
             joinedload(Task.company),
             joinedload(Task.product)
-        ).order_by(Task.created_at.desc()).all()
+        ).order_by(Task.created_at.desc())
+        if limit:
+            query = query.limit(limit)
+        tasks = query.all()
         
         return jsonify([task.to_dict() for task in tasks])
     finally:
@@ -290,7 +294,11 @@ def get_companies():
     """企業一覧を取得"""
     db = get_db_session()
     try:
-        companies = db.query(Company).order_by(Company.created_at.desc()).all()
+        limit = request.args.get('limit', type=int)
+        query = db.query(Company).order_by(Company.created_at.desc())
+        if limit:
+            query = query.limit(limit)
+        companies = query.all()
         return jsonify([company.to_dict() for company in companies])
     finally:
         db.close()

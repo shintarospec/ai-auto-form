@@ -5,6 +5,7 @@ AI AutoForm - Gemini AI Service
 
 import google.generativeai as genai
 import os
+import time
 from typing import Dict, Optional
 import json
 
@@ -333,7 +334,7 @@ Webサイトのコンテンツ:
             }
         """
         # HTMLを短縮（max_output_tokens超過を防ぐ）
-        form_html_truncated = form_html[:5000] if len(form_html) > 5000 else form_html
+        form_html_truncated = form_html[:10000] if len(form_html) > 10000 else form_html  # IMP-028: 5000→10000
         
         prompt = f"""日本語Webフォームの入力フィールドを解析し、各フィールドのfield_categoryを判定してください。
 
@@ -361,6 +362,7 @@ Webサイトのコンテンツ:
 
 ■ 会社情報
 - company: 会社名・組織名（ラベル例：会社名、企業名、組織名、法人名、団体名）
+- company_kana: 会社名カナ（ラベル例：かいしゃめい、会社名フリガナ、name属性にcompany.*kanaを含む）
 - department: 部署名（ラベル例：部署、部署名）
 - position: 役職（ラベル例：役職、肩書き）
 
@@ -387,7 +389,7 @@ Webサイトのコンテンツ:
 【重要な判定ルール】
 1. **ラベルを最優先で判定** - labelフィールドの日本語を最優先で使う
 2. 「ふりがな」「フリガナ」「カナ」「よみがな」を含むラベル → name_kana
-3. name属性に「furi」「kana」を含む → name_kana
+3. name属性に「furi」「kana」を含む → name_kana（ただしcompanyを含む場合はcompany_kana）
 4. selectで「お問い合わせ先」「種別」を選ぶ場合 → subject
 5. selectで都道府県（北海道〜沖縄県）を選ぶ場合 → prefecture
 6. 連続する名前フィールドは1番目=last_name、2番目=first_name
@@ -400,70 +402,88 @@ Webサイトのコンテンツ:
 
 【禁止】上記以外のカテゴリ名は使用禁止。"""
         
-        try:
-            response = self.model.generate_content(
-                prompt,
-                generation_config={
-                    'temperature': 0.0,  # 最も一貫性重視
-                    'max_output_tokens': 8000,
-                }
-            )
-            
-            result_text = response.text.strip()
-            
-            # マークダウンのコードブロックを削除
-            if result_text.startswith('```json'):
-                result_text = result_text[7:]
-            if result_text.startswith('```'):
-                result_text = result_text[3:]
-            if result_text.endswith('```'):
-                result_text = result_text[:-3]
-            
-            result_text = result_text.strip()
-            
+        # リトライ機構: 最大2回試行（初回 + 1回リトライ）
+        max_attempts = 2
+        backoff_seconds = [1, 3]  # 指数バックオフ
+
+        for attempt in range(max_attempts):
             try:
-                analysis = json.loads(result_text)
-            except json.JSONDecodeError as first_error:
-                # JSONが不完全な場合、修復を試みる
-                print(f"⚠️ JSON修復を試みます: {first_error}")
-                
-                # 方法1: 末尾の不完全なオブジェクトを削除
-                # 最後の完全なオブジェクト（}で終わる）を見つける
-                last_complete = result_text.rfind('},')
-                if last_complete > 0:
-                    # fieldsの配列を閉じる
-                    repaired = result_text[:last_complete+1] + '],"summary":"AI解析（修復）"}'
-                    try:
-                        analysis = json.loads(repaired)
-                        print(f"✅ JSON修復成功（方法1）")
-                    except json.JSONDecodeError:
-                        # 方法2: もっと前の完全なオブジェクトを探す
-                        for i in range(3):
-                            last_complete = result_text.rfind('},', 0, last_complete)
-                            if last_complete > 0:
-                                repaired = result_text[:last_complete+1] + '],"summary":"AI解析（修復）"}'
-                                try:
-                                    analysis = json.loads(repaired)
-                                    print(f"✅ JSON修復成功（方法2-{i+1}）")
-                                    break
-                                except:
-                                    continue
-                        else:
-                            raise first_error
-                else:
-                    raise first_error
-            
-            print(f"✅ AI フォーム解析完了: {len(analysis.get('fields', []))}フィールド検出")
-            return analysis
-            
-        except json.JSONDecodeError as e:
-            print(f"❌ AI解析結果のJSONパースエラー: {e}")
-            # デバッグ用：レスポンスの最後200文字を出力
-            print(f"   レスポンス末尾: ...{result_text[-200:] if len(result_text) > 200 else result_text}")
-            return {"fields": [], "analysis_summary": "解析に失敗しました", "error": str(e)}
-        except Exception as e:
-            print(f"❌ AIフォーム解析エラー: {e}")
-            return {"fields": [], "analysis_summary": "解析に失敗しました", "error": str(e)}
+                if attempt > 0:
+                    wait = backoff_seconds[min(attempt - 1, len(backoff_seconds) - 1)]
+                    print(f"🔄 Gemini APIリトライ ({attempt}/{max_attempts-1}): {wait}秒待機...")
+                    time.sleep(wait)
+
+                response = self.model.generate_content(
+                    prompt,
+                    generation_config={
+                        'temperature': 0.0,  # 最も一貫性重視
+                        'max_output_tokens': 8000,
+                    }
+                )
+
+                result_text = response.text.strip()
+
+                # マークダウンのコードブロックを削除
+                if result_text.startswith('```json'):
+                    result_text = result_text[7:]
+                if result_text.startswith('```'):
+                    result_text = result_text[3:]
+                if result_text.endswith('```'):
+                    result_text = result_text[:-3]
+
+                result_text = result_text.strip()
+
+                try:
+                    analysis = json.loads(result_text)
+                except json.JSONDecodeError as first_error:
+                    # JSONが不完全な場合、修復を試みる
+                    print(f"⚠️ JSON修復を試みます: {first_error}")
+
+                    # 方法1: 末尾の不完全なオブジェクトを削除
+                    # 最後の完全なオブジェクト（}で終わる）を見つける
+                    last_complete = result_text.rfind('},')
+                    if last_complete > 0:
+                        # fieldsの配列を閉じる
+                        repaired = result_text[:last_complete+1] + '],"summary":"AI解析（修復）"}'
+                        try:
+                            analysis = json.loads(repaired)
+                            print(f"✅ JSON修復成功（方法1）")
+                        except json.JSONDecodeError:
+                            # 方法2: もっと前の完全なオブジェクトを探す
+                            for i in range(3):
+                                last_complete = result_text.rfind('},', 0, last_complete)
+                                if last_complete > 0:
+                                    repaired = result_text[:last_complete+1] + '],"summary":"AI解析（修復）"}'
+                                    try:
+                                        analysis = json.loads(repaired)
+                                        print(f"✅ JSON修復成功（方法2-{i+1}）")
+                                        break
+                                    except:
+                                        continue
+                            else:
+                                raise first_error
+                    else:
+                        raise first_error
+
+                print(f"✅ AI フォーム解析完了: {len(analysis.get('fields', []))}フィールド検出")
+                return analysis
+
+            except json.JSONDecodeError as e:
+                print(f"❌ AI解析結果のJSONパースエラー: {e}")
+                print(f"   レスポンス末尾: ...{result_text[-200:] if len(result_text) > 200 else result_text}")
+                if attempt < max_attempts - 1:
+                    print("→ リトライします")
+                    continue
+                return {"fields": [], "analysis_summary": "解析に失敗しました", "error": str(e)}
+            except Exception as e:
+                error_str = str(e)
+                print(f"❌ AIフォーム解析エラー (試行{attempt+1}/{max_attempts}): {error_str}")
+                if attempt < max_attempts - 1:
+                    print("→ リトライします")
+                    continue
+                return {"fields": [], "analysis_summary": "解析に失敗しました", "error": error_str}
+
+        return {"fields": [], "analysis_summary": "解析に失敗しました", "error": "全リトライ失敗"}
 
     def generate_field_mapping(self, form_structure: Dict, available_data: Dict) -> Dict:
         """
