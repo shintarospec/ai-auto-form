@@ -1136,6 +1136,8 @@ class AutoExecutor:
         if _raw_phone in ('090-0000-0000', '09000000000', '080-0000-0000', '08000000000'):
             _phone_converted = '03-6384-2731'
 
+        # IMP-048: phone/telは常にdigits only（ハイフン付きだとバリデーション拒否されるフォーム対策）
+        _phone_converted = ''.join(filter(str.isdigit, _phone_converted))
         category_mapping = {
             # 名前系
             'name': product.sender_name or f"{product.sender_last_name or ''} {product.sender_first_name or ''}".strip(),
