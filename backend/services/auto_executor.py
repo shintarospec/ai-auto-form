@@ -1341,6 +1341,64 @@ class AutoExecutor:
                 category = 'url'
 
 
+            # IMP-043: name属性からの独立カテゴリ推定 + クロスチェック
+            # F-3(Gemini)のlabel-input対応ズレによる入れ違いを防止
+            if field_name and category not in ('checkbox', 'radio', 'other', 'unknown', ''):
+                _fn_lower = field_name.lower()
+                _name_category = None
+                # name属性からカテゴリを推定（優先度順）
+                if any(k in _fn_lower for k in ('email', 'mail', 'e-mail')):
+                    _name_category = 'email'
+                elif any(k in _fn_lower for k in ('tel', 'phone', 'denwa')):
+                    _name_category = 'phone'
+                elif any(k in _fn_lower for k in ('company', 'corp', 'kaisha', 'organization', 'org_name', 'firm')):
+                    _name_category = 'company'
+                elif any(k in _fn_lower for k in ('message', 'body', 'content', 'inquiry', 'naiyo')):
+                    _name_category = 'message'
+                elif any(k in _fn_lower for k in ('subject', 'title', 'kenmei')):
+                    _name_category = 'subject'
+                elif any(k in _fn_lower for k in ('department', 'busho', 'division', 'section')):
+                    _name_category = 'department'
+                elif any(k in _fn_lower for k in ('position', 'yakushoku', 'job_title', 'jobtitle')):
+                    _name_category = 'position'
+                elif any(k in _fn_lower for k in ('kana', 'furi', 'reading', 'pronunciation')):
+                    _name_category = 'name_kana'
+                elif any(k in _fn_lower for k in ('zip', 'post', 'yubin')):
+                    _name_category = 'zipcode'
+                elif any(k in _fn_lower for k in ('pref',)):
+                    _name_category = 'prefecture'
+                elif any(k in _fn_lower for k in ('city', 'shiku')):
+                    _name_category = 'city'
+                elif any(k in _fn_lower for k in ('address', 'addr', 'jyusho', 'jusho')):
+                    _name_category = 'address'
+                elif any(k in _fn_lower for k in ('sei', 'last_name', 'family_name', 'lastname', 'familyname')):
+                    if 'kana' not in _fn_lower and 'furi' not in _fn_lower:
+                        _name_category = 'last_name'
+                elif any(k in _fn_lower for k in ('mei', 'first_name', 'given_name', 'firstname', 'givenname')):
+                    if 'kana' not in _fn_lower and 'furi' not in _fn_lower:
+                        _name_category = 'first_name'
+                elif any(k in _fn_lower for k in ('name', 'namae', 'shimei')):
+                    if not any(k in _fn_lower for k in ('company', 'org', 'corp', 'file', 'user', 'kana', 'furi')):
+                        _name_category = 'full_name'
+                # クロスチェック: F-3カテゴリとname属性カテゴリが矛盾する場合
+                if _name_category and _name_category != category:
+                    # 同系統のカテゴリは許容（phone/phone1, last_name/name等）
+                    _same_group = {
+                        'phone': {'phone', 'phone1', 'phone2', 'phone3'},
+                        'full_name': {'full_name', 'name', 'last_name', 'first_name'},
+                        'name': {'full_name', 'name', 'last_name', 'first_name'},
+                        'last_name': {'full_name', 'name', 'last_name'},
+                        'first_name': {'full_name', 'name', 'first_name'},
+                        'name_kana': {'name_kana', 'last_name_kana', 'first_name_kana'},
+                        'zipcode': {'zipcode', 'zipcode1', 'zipcode2'},
+                        'address': {'address', 'city', 'prefecture'},
+                    }
+                    _group = _same_group.get(_name_category, {_name_category})
+                    if category not in _group:
+                        print(f"  🔧 IMP-043: name属性クロスチェック: {field_name} (F-3:{category} → name:{_name_category})")
+                        category = _name_category
+                        field['_category_corrected'] = True
+
             # ラベルからカテゴリを補正（AI解析の誤分類対策）
             placeholder = field.get('placeholder', '')
             
