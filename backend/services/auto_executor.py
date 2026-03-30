@@ -2712,7 +2712,7 @@ class AutoExecutor:
                     const nearText = field.parentElement ? field.parentElement.textContent : '';
                     const context = placeholder + ' ' + labelText + ' ' + nearText;
                     const wantsHiragana = context.includes('ひらがな') || context.includes('ふりがな') ||
-                                          context.includes('せい') || context.includes('めい') ||
+                                          // IMP-049: removed sei/mei match (false positive on katakana labels)
                                           (placeholder && /^[ぁ-ん\s]+$/.test(placeholder));
                     if (wantsHiragana) {
                         // カタカナ→ひらがな変換
