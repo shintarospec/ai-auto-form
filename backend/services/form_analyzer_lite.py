@@ -39,6 +39,9 @@ NAME_PATTERNS = [
     (r'department|busho|division|section', 'department'),
     (r'position|yakushoku|job[-_]?title|jobtitle', 'position'),
     # name_kana（kanaを先にチェック — nameより前に）
+    # NAME2_SEI等の「2」付きname属性はkana系として判定
+    (r'name[-_]?2[-_]?sei|kana[-_]?sei|sei[-_]?kana', 'last_name_kana'),
+    (r'name[-_]?2[-_]?mei|kana[-_]?mei|mei[-_]?kana', 'first_name_kana'),
     (r'kana|furi|reading|pronunciation|furigana', 'name_kana'),
     # name系（姓→名→フル の順）
     (r'(?:last|family)[-_]?name|sei(?:$|[-_])|(?:^|[-_])sei(?:$|[-_])', 'last_name'),
@@ -65,7 +68,7 @@ LABEL_PATTERNS = [
     # phone
     (r'電話|tel(?!e)|phone|携帯', 'phone'),
     # company
-    (r'会社名|法人名|企業名|御社名|貴社名|組織名|所属.*(?:名|企業|会社)', 'company'),
+    (r'会社名|法人名|企業名|御社名|貴社名|組織名|勤め先|勤務先|所属.*(?:名|企業|会社)', 'company'),
     # department / position
     (r'部署|所属部門|部門名', 'department'),
     (r'役職', 'position'),
@@ -458,7 +461,11 @@ class FormAnalyzerLite:
             opt_texts = ' '.join(o.get('text', '') for o in raw['options'])
             if re.search(r'北海道|東京|大阪|福岡|都道府県', opt_texts):
                 return 'prefecture'
-            if re.search(r'お問い合わせ|ご相談|サービス|その他', opt_texts):
+            if re.search(r'お問い合わせ|ご相談|サービス|その他|ご依頼|ご質問|お見積', opt_texts):
+                return 'subject'
+            # ラベルにsubject系キーワードがある場合
+            combined_label = f"{raw.get('label', '')} {raw.get('name', '')}".lower()
+            if re.search(r'種別|種類|カテゴリ|category|type|subject|項目', combined_label):
                 return 'subject'
 
         return 'other'
