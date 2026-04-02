@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 
 load_dotenv('/opt/ai-auto-form/.env')
 
-import google.generativeai as genai
+from google import genai
 import psycopg2
 import psycopg2.extras
 
@@ -43,11 +43,8 @@ if not api_key:
     print("ERROR: No GEMINI_API_KEY found")
     sys.exit(1)
 
-genai.configure(api_key=api_key)
-model = genai.GenerativeModel(
-    "gemini-2.5-flash",
-    generation_config={"max_output_tokens": 256}
-)
+client = genai.Client(api_key=api_key)
+MODEL_ID = "gemini-2.5-flash"
 
 ss_dir = '/opt/ai-auto-form/screenshots'
 results_dir = '/opt/ai-auto-form/test-results'
@@ -164,16 +161,24 @@ def run_grading(cur, conn, task_ids, grade_type, prompt, db_keys):
             img_data = f.read()
 
         try:
-            response = model.generate_content([
-                prompt,
-                {"mime_type": "image/png", "data": img_data}
-            ])
+            from google.genai import types
+            response = client.models.generate_content(
+                model=MODEL_ID,
+                contents=[
+                    types.Part.from_text(text=prompt),
+                    types.Part.from_bytes(data=img_data, mime_type="image/png"),
+                ],
+                config=types.GenerateContentConfig(
+                    max_output_tokens=256,
+                    thinking_config=types.ThinkingConfig(thinking_budget=0),
+                ),
+            )
             text = response.text.strip()
             # トークン使用量ログ
             try:
                 um = response.usage_metadata
                 if um and i < 3:
-                    print(f"  tokens: input={um.prompt_token_count} output={um.candidates_token_count} total={um.total_token_count}")
+                    print(f"  tokens: input={um.prompt_token_count} output={um.candidates_token_count} thinking={getattr(um, 'thoughts_token_count', 0)} total={um.total_token_count}")
             except Exception:
                 pass
             grade = parse_grade(text)
