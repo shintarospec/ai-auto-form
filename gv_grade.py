@@ -148,6 +148,11 @@ def run_grading(cur, conn, task_ids, grade_type, prompt, db_keys):
     results = {"A": [], "B": [], "C": [], "D": []}
     errors = []
     graded_at = datetime.now().isoformat()
+    # トークン使用量の累積カウンタ
+    total_input_tokens = 0
+    total_output_tokens = 0
+    total_thinking_tokens = 0
+    total_all_tokens = 0
 
     for i, tid in enumerate(task_ids):
         ss_file = find_screenshot(tid, grade_type)
@@ -174,11 +179,20 @@ def run_grading(cur, conn, task_ids, grade_type, prompt, db_keys):
                 ),
             )
             text = response.text.strip()
-            # トークン使用量ログ
+            # トークン使用量の累積
             try:
                 um = response.usage_metadata
-                if um and i < 3:
-                    print(f"  tokens: input={um.prompt_token_count} output={um.candidates_token_count} thinking={getattr(um, 'thoughts_token_count', 0)} total={um.total_token_count}")
+                if um:
+                    _in = um.prompt_token_count or 0
+                    _out = um.candidates_token_count or 0
+                    _think = getattr(um, 'thoughts_token_count', 0) or 0
+                    _total = um.total_token_count or 0
+                    total_input_tokens += _in
+                    total_output_tokens += _out
+                    total_thinking_tokens += _think
+                    total_all_tokens += _total
+                    if i < 3:
+                        print(f"  tokens: in={_in} out={_out} think={_think} total={_total}")
             except Exception:
                 pass
             grade = parse_grade(text)
@@ -219,12 +233,30 @@ def run_grading(cur, conn, task_ids, grade_type, prompt, db_keys):
                 errors.append({"task_id": tid, "error": f"parse_error: {text[:100]}"})
                 print(f'[{i+1}/{len(task_ids)}] Task {tid}: PARSE ERROR - {text[:80]}')
 
+            # 進捗ログ（100件ごとにトークン累積を出力）
+            if (i + 1) % 100 == 0:
+                _graded = i + 1
+                _avg = total_all_tokens / _graded if _graded > 0 else 0
+                print(f"  📊 [{_graded}/{len(task_ids)}] tokens累積: in={total_input_tokens:,} out={total_output_tokens:,} think={total_thinking_tokens:,} total={total_all_tokens:,} (avg={_avg:.0f}/件)")
+
             time.sleep(1)
 
         except Exception as e:
             errors.append({"task_id": tid, "error": str(e)[:100]})
             print(f'[{i+1}/{len(task_ids)}] Task {tid}: ERROR - {str(e)[:80]}')
             time.sleep(2)
+
+    # トークン使用量サマリ
+    graded_count = sum(len(v) for v in results.values())
+    if graded_count > 0:
+        avg_tokens = total_all_tokens / graded_count
+        print(f"\n📊 トークン使用量サマリ:")
+        print(f"  input:    {total_input_tokens:,} tokens")
+        print(f"  output:   {total_output_tokens:,} tokens")
+        print(f"  thinking: {total_thinking_tokens:,} tokens")
+        print(f"  total:    {total_all_tokens:,} tokens")
+        print(f"  処理件数:  {graded_count}件")
+        print(f"  平均:     {avg_tokens:.0f} tokens/件")
 
     return results, errors
 
