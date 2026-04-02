@@ -44,7 +44,10 @@ if not api_key:
     sys.exit(1)
 
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel(
+    "gemini-2.5-flash",
+    generation_config={"max_output_tokens": 256}
+)
 
 ss_dir = '/opt/ai-auto-form/screenshots'
 results_dir = '/opt/ai-auto-form/test-results'
@@ -166,6 +169,13 @@ def run_grading(cur, conn, task_ids, grade_type, prompt, db_keys):
                 {"mime_type": "image/png", "data": img_data}
             ])
             text = response.text.strip()
+            # トークン使用量ログ
+            try:
+                um = response.usage_metadata
+                if um and i < 3:
+                    print(f"  tokens: input={um.prompt_token_count} output={um.candidates_token_count} total={um.total_token_count}")
+            except Exception:
+                pass
             grade = parse_grade(text)
 
             if grade:
